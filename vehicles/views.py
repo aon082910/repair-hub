@@ -10,8 +10,10 @@ from repairguides.models import RepairGuide, WiringDiagram
 
 from .models import MaintenanceReminder, Make, Vehicle, VehicleModel
 from .recalls import get_complaints, get_recalls
+from .safety import get_safety_ratings
 from .specs import find_vehicle_options, get_vehicle_specs
 from .vin import decode_vin
+from .wiki import get_model_summary
 
 
 @staff_or_technician_required
@@ -84,6 +86,22 @@ def specs_data(request, pk):
         return JsonResponse({"specs": {}, "options": []})
     specs = get_vehicle_specs(options[0]["id"])
     return JsonResponse({"specs": specs, "options": options})
+
+
+@staff_or_technician_required
+def safety_data(request, pk):
+    """AJAX endpoint: crash-test safety ratings via NHTSA's free public API."""
+    vehicle = get_object_or_404(Vehicle, pk=pk)
+    ratings = get_safety_ratings(vehicle.make.name, vehicle.model.name, vehicle.year)
+    return JsonResponse({"ratings": ratings})
+
+
+@staff_or_technician_required
+def model_summary_data(request, pk):
+    """AJAX endpoint: a short model background summary via Wikipedia's free public API."""
+    vehicle = get_object_or_404(Vehicle, pk=pk)
+    summary = get_model_summary(vehicle.make.name, vehicle.model.name)
+    return JsonResponse({"summary": summary})
 
 
 @staff_or_technician_required

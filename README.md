@@ -118,6 +118,31 @@ control, never automated fetching.
   history for that vehicle — print it and stick it on the car.
 - **Light/dark theme toggle** — button at the bottom of the sidebar; saved
   per-browser via localStorage.
+- **Sales tax** — a shop-wide tax rate (Shop Settings, staff-only) applied to
+  labor + parts on every work order and estimate, shown as its own line on
+  invoices, PDFs, and both customer portals. Mark a customer tax-exempt from
+  their page to skip it for them.
+- **Payment tracking** — create an invoice from a completed work order,
+  record payments against it (cash/card/check/other, partial payments
+  allowed), and it auto-marks itself paid once the balance reaches zero.
+- **Accounting CSV export** — download all invoices (date, customer, labor,
+  parts, tax, total, paid, balance) for your bookkeeping software, from
+  Shop Settings.
+- **Warranty tracking** — set a warranty period (months and/or miles) on a
+  completed work order; the vehicle's job history shows Under Warranty /
+  Expired, checked against the vehicle's latest known odometer reading.
+- **Technician time clock** — a tech can clock in/out directly on their
+  assigned work order; the time log (with computed hours) is visible to
+  staff on that job.
+- **VIN barcode scanning** — on the "Add Vehicle" page, "Scan Barcode" opens
+  the camera and reads the VIN barcode (Code 39/128) using the browser's
+  native BarcodeDetector API — no external library, and it degrades to a
+  plain message on browsers that don't support it (currently Chrome/Edge
+  only, mostly Android).
+- **Crash-test safety ratings** — NHTSA's 5-star ratings (overall, frontal,
+  side, rollover) alongside recalls/complaints on the vehicle page.
+- **Model background info** — a short Wikipedia summary (with photo and
+  link) for the vehicle's make/model, shown at the top of its page.
 
 ### Access model
 
@@ -263,12 +288,16 @@ model, including image/file uploads and inline step editors for guides.
 | [fueleconomy.gov (EPA)](https://www.fueleconomy.gov/feg/ws/) | Engine/transmission/MPG specs | Free public government API, no key |
 | [Wikimedia Commons](https://commons.wikimedia.org/w/api.php) | Reference photos/diagrams | Free public API, CC-licensed media |
 | YouTube (search link only) | Repair walkthrough videos | Plain search-results link, no API key, no embedding |
+| [NHTSA SafetyRatings](https://api.nhtsa.gov/) | Crash-test star ratings | Free public government API, no key |
+| [Wikipedia REST API](https://en.wikipedia.org/api/rest_v1/) | Model background summary | Free public API, CC BY-SA content, shown with attribution and a link back |
 
 All of these are optional at runtime — pages degrade gracefully (with a plain
 message) if the container has no internet access. Deliberately **not**
 wired in: Mitchell1, Chilton/Haynes, RepairPal Pro, AutoZone/RockAuto parts
 catalogs, and manufacturer factory service manuals — all are either paid,
-ToS-restricted, or copyrighted with no public API.
+ToS-restricted, or copyrighted with no public API. NHTSA Technical Service
+Bulletins were checked too (their site has a searchable TSB database) but
+there's no documented public API for it, so it's not wired in either.
 
 ## Local development (without Docker)
 
@@ -288,12 +317,14 @@ No environment variables needed — it defaults to `config/db.sqlite3` and
 
 ## Running tests
 
-The test suite (92 tests) covers models, permissions, and the key workflows
+The test suite (119 tests) covers models, permissions, and the key workflows
 across every app — access control for all three account tiers, the full
 estimate approve/decline/convert lifecycle, inventory stock deduction,
 inspection creation and estimate generation, maintenance reminder due/overdue
-logic, and the external API clients (mocked, not hitting the real network).
-It runs against an in-memory SQLite database, so it needs no Postgres server:
+logic, tax calculation and tax-exempt customers, invoice/payment tracking,
+warranty expiration, the technician time clock, and the external API clients
+(mocked, not hitting the real network). It runs against an in-memory SQLite
+database, so it needs no separate database server:
 
 ```bash
 python manage.py test --settings=repairhub.test_settings

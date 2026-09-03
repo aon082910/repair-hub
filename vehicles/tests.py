@@ -11,8 +11,10 @@ from shop.models import Customer, WorkOrder
 
 from .models import MaintenanceReminder, Make, Vehicle, VehicleModel
 from .recalls import get_complaints, get_recalls
+from .safety import get_safety_ratings
 from .specs import find_vehicle_options
 from .vin import decode_vin
+from .wiki import get_model_summary
 
 User = get_user_model()
 
@@ -240,3 +242,61 @@ class QRCodeTests(TestCase):
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp["Content-Type"], "image/png")
         self.assertTrue(resp.content.startswith(b"\x89PNG"))
+
+
+class SafetyRatingsTests(TestCase):
+    @patch("vehicles.safety.requests.get")
+    def test_fetches_ratings_via_two_step_lookup(self, mock_get):
+        model_resp = Mock(status_code=200, json=lambda: {"Results": [{"VehicleId": 12636}]})
+        model_resp.raise_for_status = lambda: None
+        detail_resp = Mock(status_code=200, json=lambda: {"Results": [{"OverallRating": "5"}]})
+        detail_resp.raise_for_status = lambda: None
+        mock_get.side_effect = [model_resp, detail_resp]
+
+        result = get_safety_ratings("Honda", "Civic", 2018)
+        self.assertEqual(result, {"OverallRating": "5"})
+
+    def test_empty_without_required_fields(self):
+        self.assertEqual(get_safety_ratings("", "Civic", 2018), {})
+
+    @patch("vehicles.safety.requests.get", side_effect=requests.RequestException("down"))
+    def test_graceful_on_network_failure(self, mock_get):
+        self.assertEqual(get_safety_ratings("Honda", "Civic", 2018), {})
+
+    @patch("vehicles.safety.requests.get")
+    def test_empty_when_no_matching_variant(self, mock_get):
+        resp = Mock(status_code=200, json=lambda: {"Results": []})
+        resp.raise_for_status = lambda: None
+        mock_get.return_value = resp
+        self.assertEqual(get_safety_ratings("Honda", "Civic", 2018), {})
+
+
+class ModelSummaryTests(TestCase):
+    @patch("vehicles.wiki.requests.get")
+    def test_parses_standard_summary(self, mock_get):
+        mock_get.return_value = Mock(
+            status_code=200,
+            json=lambda: {
+                "type": "standard",
+                "title": "Honda Civic",
+                "extract": "The Honda Civic is a car.",
+                "thumbnail": {"source": "https://x/thumb.jpg"},
+                "content_urls": {"desktop": {"page": "https://en.wikipedia.org/wiki/Honda_Civic"}},
+            },
+        )
+        result = get_model_summary("Honda", "Civic")
+        self.assertEqual(result["title"], "Honda Civic")
+        self.assertIn("car", result["extract"])
+
+    def test_empty_without_make_or_model(self):
+        self.assertEqual(get_model_summary("", "Civic"), {})
+
+    @patch("vehicles.wiki.requests.get")
+    def test_non_standard_page_type_returns_empty(self, mock_get):
+        mock_get.return_value = Mock(status_code=200, json=lambda: {"type": "disambiguation"})
+        self.assertEqual(get_model_summary("Honda", "Civic"), {})
+
+    @patch("vehicles.wiki.requests.get")
+    def test_404_returns_empty(self, mock_get):
+        mock_get.return_value = Mock(status_code=404)
+        self.assertEqual(get_model_summary("Honda", "NonexistentModelXYZ"), {})

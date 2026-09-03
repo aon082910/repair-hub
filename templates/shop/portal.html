@@ -20,6 +20,7 @@
     <tr><td>{{ p.description }}{% if p.part_number %} ({{ p.part_number }}){% endif %} × {{ p.quantity }}</td><td>${{ p.line_total|floatformat:2 }}</td></tr>
     {% endfor %}
   </table>
+  {% if work_order.tax_total %}<p style="text-align:right;" class="muted">Tax: ${{ work_order.tax_total|floatformat:2 }}</p>{% endif %}
   <p style="text-align:right;font-weight:700;">Total: ${{ work_order.grand_total|floatformat:2 }}</p>
   {% endif %}
 

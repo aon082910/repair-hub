@@ -17,13 +17,24 @@
   </div>
 </div>
 
+<div class="card" id="model-summary-box" style="display:none;">
+  <div style="display:flex;gap:1rem;">
+    <img id="model-summary-thumb" src="" alt="" style="width:100px;height:100px;object-fit:cover;border-radius:6px;display:none;">
+    <div>
+      <strong id="model-summary-title"></strong>
+      <p id="model-summary-extract" class="muted" style="font-size:0.9rem;"></p>
+      <a id="model-summary-link" href="#" target="_blank" rel="noopener" class="muted" style="font-size:0.8rem;">via Wikipedia</a>
+    </div>
+  </div>
+</div>
+
 <div class="tabs">
   <button class="tab-btn active" data-tab="guides">Repair Guides</button>
   <button class="tab-btn" data-tab="wiring">Wiring Diagrams</button>
   <button class="tab-btn" data-tab="maintenance">Maintenance</button>
   <button class="tab-btn" data-tab="specs">Specs</button>
   <button class="tab-btn" data-tab="photos">Reference Photos</button>
-  <button class="tab-btn" data-tab="recalls">Recalls &amp; Complaints</button>
+  <button class="tab-btn" data-tab="recalls">Recalls, Complaints &amp; Safety</button>
   <button class="tab-btn" data-tab="alldata">ALLDATA</button>
 </div>
 
@@ -271,6 +282,50 @@ async function loadRecalls() {
   } catch (e) {
     statusEl.textContent = 'Could not reach NHTSA (offline?). Recalls/complaints unavailable right now.';
   }
+
+  try {
+    const resp = await fetch('{% url "vehicles:safety_data" vehicle.pk %}');
+    const data = await resp.json();
+    const r = data.ratings || {};
+    let html = '<div class="section-title">Crash Test Safety Ratings</div>';
+    if (r.OverallRating && r.OverallRating !== 'Not Rated') {
+      html += '<table>';
+      const rows = [
+        ['Overall', r.OverallRating], ['Frontal Crash', r.OverallFrontCrashRating],
+        ['Side Crash', r.OverallSideCrashRating], ['Rollover', r.RolloverRating],
+      ];
+      rows.forEach(function (row) {
+        if (row[1]) html += '<tr><th>' + row[0] + '</th><td>' + row[1] + ' / 5 stars</td></tr>';
+      });
+      html += '</table>';
+    } else {
+      html += '<p class="muted">No NHTSA crash-test rating on file for this vehicle.</p>';
+    }
+    document.getElementById('recalls-content').insertAdjacentHTML('beforeend', html);
+  } catch (e) {
+    // Safety ratings are a bonus section; fail silently if unreachable.
+  }
 }
+
+(async function loadModelSummary() {
+  try {
+    const resp = await fetch('{% url "vehicles:model_summary_data" vehicle.pk %}');
+    const data = await resp.json();
+    const s = data.summary || {};
+    if (!s.extract) return;
+    document.getElementById('model-summary-title').textContent = s.title || '';
+    document.getElementById('model-summary-extract').textContent = s.extract || '';
+    const link = document.getElementById('model-summary-link');
+    if (s.page_url) link.href = s.page_url; else link.style.display = 'none';
+    if (s.thumbnail) {
+      const img = document.getElementById('model-summary-thumb');
+      img.src = s.thumbnail;
+      img.style.display = 'block';
+    }
+    document.getElementById('model-summary-box').style.display = 'block';
+  } catch (e) {
+    // Optional background info; fail silently if unreachable.
+  }
+})();
 </script>
 {% endblock %}

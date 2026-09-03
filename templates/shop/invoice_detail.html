@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block title %}{{ invoice.invoice_number }} - Repair-Hub{% endblock %}
+{% block content %}
+<h2>{{ invoice.invoice_number }} <span class="badge {% if invoice.is_fully_paid %}status-completed{% else %}status-waiting_parts{% endif %}">{% if invoice.is_fully_paid %}Paid{% else %}Balance Due{% endif %}</span></h2>
+<p class="muted">
+  <a href="{{ invoice.work_order.get_absolute_url }}">{{ invoice.work_order }}</a> ·
+  {{ invoice.work_order.customer }} · Issued {{ invoice.issued_date|date:"M j, Y" }}
+</p>
+
+<div class="card">
+  <table>
+    <tr><td>Labor</td><td>${{ invoice.work_order.labor_total|floatformat:2 }}</td></tr>
+    <tr><td>Parts</td><td>${{ invoice.work_order.parts_total|floatformat:2 }}</td></tr>
+    <tr><td>Tax</td><td>${{ invoice.work_order.tax_total|floatformat:2 }}</td></tr>
+    <tr><td><strong>Total</strong></td><td><strong>${{ invoice.work_order.grand_total|floatformat:2 }}</strong></td></tr>
+    <tr><td>Paid</td><td>${{ invoice.amount_paid|floatformat:2 }}</td></tr>
+    <tr><td><strong>Balance Due</strong></td><td><strong>${{ invoice.balance_due|floatformat:2 }}</strong></td></tr>
+  </table>
+</div>
+
+<div class="section-title">Payments</div>
+<div class="card">
+  {% if invoice.payments.all %}
+  <table>
+    <tr><th>Date</th><th>Method</th><th>Amount</th><th>Notes</th></tr>
+    {% for p in invoice.payments.all %}
+    <tr><td>{{ p.paid_date|date:"M j, Y" }}</td><td>{{ p.get_method_display }}</td><td>${{ p.amount|floatformat:2 }}</td><td>{{ p.notes }}</td></tr>
+    {% endfor %}
+  </table>
+  {% else %}
+  <p class="muted">No payments recorded yet.</p>
+  {% endif %}
+
+  {% if not invoice.is_fully_paid %}
+  <form method="post" action="{% url 'shop:invoice_add_payment' invoice.pk %}" style="margin-top:0.75rem;display:flex;gap:0.5rem;align-items:end;flex-wrap:wrap;">
+    {% csrf_token %}
+    <div><label>Amount</label><input type="number" step="0.01" name="amount" required></div>
+    <div>
+      <label>Method</label>
+      <select name="method">
+        <option value="cash">Cash</option>
+        <option value="card">Card</option>
+        <option value="check">Check</option>
+        <option value="other">Other</option>
+      </select>
+    </div>
+    <div style="flex:1;"><label>Notes</label><input type="text" name="notes"></div>
+    <button class="btn secondary" type="submit">Record Payment</button>
+  </form>
+  {% endif %}
+</div>
+{% endblock %}

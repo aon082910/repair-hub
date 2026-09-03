@@ -1,8 +1,38 @@
+import datetime
 import uuid
 from decimal import Decimal
 
 from django.db import models
 from django.urls import reverse
+from django.utils import timezone
+
+
+class ShopSettings(models.Model):
+    """Singleton: shop-wide settings that apply to every invoice/estimate."""
+
+    tax_rate_percent = models.DecimalField(
+        max_digits=5, decimal_places=2, default=Decimal("0.00"),
+        help_text="Sales tax rate applied to labor + parts, e.g. 8.25 for 8.25%.",
+    )
+    business_name = models.CharField(max_length=150, blank=True)
+
+    class Meta:
+        verbose_name_plural = "shop settings"
+
+    def __str__(self):
+        return "Shop Settings"
+
+    def save(self, *args, **kwargs):
+        self.pk = 1
+        super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        pass
+
+    @classmethod
+    def get_solo(cls):
+        obj, _ = cls.objects.get_or_create(pk=1)
+        return obj
 
 
 class Customer(models.Model):
@@ -11,6 +41,7 @@ class Customer(models.Model):
     email = models.EmailField(blank=True)
     address = models.CharField(max_length=255, blank=True)
     notes = models.TextField(blank=True)
+    tax_exempt = models.BooleanField(default=False, help_text="e.g. resale/wholesale customers")
     user = models.OneToOneField(
         "auth.User",
         on_delete=models.SET_NULL,
@@ -78,6 +109,12 @@ class WorkOrder(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
     completed_at = models.DateTimeField(null=True, blank=True)
     access_token = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
+    warranty_months = models.PositiveIntegerField(
+        null=True, blank=True, help_text="Parts/labor warranty on this repair, in months from completion."
+    )
+    warranty_miles = models.PositiveIntegerField(
+        null=True, blank=True, help_text="Warranty mileage limit from the odometer reading at completion."
+    )
 
     class Meta:
         ordering = ["-created_at"]
@@ -106,8 +143,34 @@ class WorkOrder(models.Model):
         return total
 
     @property
+    def tax_total(self) -> Decimal:
+        if self.customer.tax_exempt:
+            return Decimal("0.00")
+        rate = ShopSettings.get_solo().tax_rate_percent
+        return (self.labor_total + self.parts_total) * rate / Decimal("100")
+
+    @property
     def grand_total(self) -> Decimal:
-        return self.labor_total + self.parts_total
+        return self.labor_total + self.parts_total + self.tax_total
+
+    @property
+    def warranty_expiration_date(self):
+        if self.warranty_months and self.completed_at:
+            return (self.completed_at + datetime.timedelta(days=30 * self.warranty_months)).date()
+        return None
+
+    @property
+    def is_under_warranty(self) -> bool:
+        expiration = self.warranty_expiration_date
+        if expiration is None:
+            return False
+        if timezone.localdate() > expiration:
+            return False
+        if self.warranty_miles and self.odometer is not None:
+            current = self.vehicle.latest_odometer()
+            if current is not None and (current - self.odometer) > self.warranty_miles:
+                return False
+        return True
 
 
 class LaborLine(models.Model):
@@ -209,8 +272,15 @@ class Estimate(models.Model):
         return sum((line.line_total for line in self.part_lines.all()), Decimal("0.00"))
 
     @property
+    def tax_total(self) -> Decimal:
+        if self.customer.tax_exempt:
+            return Decimal("0.00")
+        rate = ShopSettings.get_solo().tax_rate_percent
+        return (self.labor_total + self.parts_total) * rate / Decimal("100")
+
+    @property
     def grand_total(self) -> Decimal:
-        return self.labor_total + self.parts_total
+        return self.labor_total + self.parts_total + self.tax_total
 
 
 class EstimateLaborLine(models.Model):
@@ -285,6 +355,64 @@ class Invoice(models.Model):
 
     def __str__(self):
         return self.invoice_number
+
+    @property
+    def amount_paid(self) -> Decimal:
+        return sum((p.amount for p in self.payments.all()), Decimal("0.00"))
+
+    @property
+    def balance_due(self) -> Decimal:
+        return self.work_order.grand_total - self.amount_paid
+
+    @property
+    def is_fully_paid(self) -> bool:
+        return self.balance_due <= Decimal("0.00")
+
+
+class PaymentRecord(models.Model):
+    METHOD_CHOICES = [
+        ("cash", "Cash"),
+        ("card", "Card"),
+        ("check", "Check"),
+        ("other", "Other"),
+    ]
+
+    invoice = models.ForeignKey(Invoice, on_delete=models.CASCADE, related_name="payments")
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    method = models.CharField(max_length=10, choices=METHOD_CHOICES, default="card")
+    paid_date = models.DateField(auto_now_add=True)
+    notes = models.CharField(max_length=255, blank=True)
+
+    class Meta:
+        ordering = ["-paid_date", "-id"]
+
+    def __str__(self):
+        return f"${self.amount} ({self.get_method_display()})"
+
+
+class TimeEntry(models.Model):
+    """A technician's clocked time against one work order."""
+
+    work_order = models.ForeignKey(WorkOrder, on_delete=models.CASCADE, related_name="time_entries")
+    technician = models.ForeignKey(Technician, on_delete=models.CASCADE, related_name="time_entries")
+    clock_in = models.DateTimeField(auto_now_add=True)
+    clock_out = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-clock_in"]
+
+    def __str__(self):
+        return f"{self.technician} on WO#{self.work_order_id}"
+
+    @property
+    def is_active(self) -> bool:
+        return self.clock_out is None
+
+    @property
+    def duration_hours(self) -> Decimal:
+        end = self.clock_out or timezone.now()
+        seconds = (end - self.clock_in).total_seconds()
+        return Decimal(seconds / 3600).quantize(Decimal("0.01"))
 
 
 DEFAULT_INSPECTION_ITEMS = [

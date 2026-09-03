@@ -50,6 +50,7 @@
   {% endif %}
 
   <table>
+    <tr><td colspan="3"></td><td>Tax</td><td class="right">${{ work_order.tax_total|floatformat:2 }}</td></tr>
     <tr class="total-row"><td colspan="3"></td><td>Total</td><td class="right">${{ work_order.grand_total|floatformat:2 }}</td></tr>
   </table>
 

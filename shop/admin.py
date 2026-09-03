@@ -13,7 +13,10 @@ from .models import (
     Invoice,
     LaborLine,
     PartLine,
+    PaymentRecord,
+    ShopSettings,
     Technician,
+    TimeEntry,
     WorkOrder,
 )
 
@@ -40,8 +43,20 @@ class EstimatePartLineInline(admin.TabularInline):
 
 @admin.register(Customer)
 class CustomerAdmin(admin.ModelAdmin):
-    list_display = ["name", "phone", "email"]
+    list_display = ["name", "phone", "email", "tax_exempt"]
+    list_filter = ["tax_exempt"]
     search_fields = ["name", "phone", "email"]
+
+
+@admin.register(ShopSettings)
+class ShopSettingsAdmin(admin.ModelAdmin):
+    list_display = ["business_name", "tax_rate_percent"]
+
+    def has_add_permission(self, request):
+        return not ShopSettings.objects.exists()
+
+    def has_delete_permission(self, request, obj=None):
+        return False
 
 
 @admin.register(WorkOrder)
@@ -58,11 +73,17 @@ class WorkOrderAdmin(admin.ModelAdmin):
         return obj.get_portal_url() if obj.pk else "(save first)"
 
 
+class PaymentRecordInline(admin.TabularInline):
+    model = PaymentRecord
+    extra = 1
+
+
 @admin.register(Invoice)
 class InvoiceAdmin(admin.ModelAdmin):
-    list_display = ["invoice_number", "work_order", "issued_date", "paid"]
+    list_display = ["invoice_number", "work_order", "issued_date", "paid", "amount_paid", "balance_due"]
     list_filter = ["paid"]
     search_fields = ["invoice_number"]
+    inlines = [PaymentRecordInline]
 
 
 @admin.register(Estimate)
@@ -121,3 +142,10 @@ class ActivityLogEntryAdmin(admin.ModelAdmin):
     list_display = ["timestamp", "user", "action", "object_repr"]
     list_filter = ["action"]
     search_fields = ["action", "object_repr"]
+
+
+@admin.register(TimeEntry)
+class TimeEntryAdmin(admin.ModelAdmin):
+    list_display = ["__str__", "clock_in", "clock_out", "duration_hours", "is_active"]
+    list_filter = ["technician"]
+    autocomplete_fields = ["work_order", "technician"]

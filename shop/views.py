@@ -1,3 +1,4 @@
+import csv
 import datetime
 import io
 
@@ -24,10 +25,14 @@ from .models import (
     EstimatePartLine,
     Inspection,
     InspectionItem,
+    Invoice,
     InventoryPart,
     LaborLine,
     PartLine,
+    PaymentRecord,
+    ShopSettings,
     Technician,
+    TimeEntry,
     WorkOrder,
 )
 from .utils import log_activity
@@ -73,6 +78,15 @@ def customer_create(request):
         log_activity(request.user, "Created customer", customer)
         return redirect(customer.get_absolute_url())
     return render(request, "shop/customer_form.html")
+
+
+@staff_required
+def customer_toggle_tax_exempt(request, pk):
+    customer = get_object_or_404(Customer, pk=pk)
+    if request.method == "POST":
+        customer.tax_exempt = not customer.tax_exempt
+        customer.save(update_fields=["tax_exempt"])
+    return redirect(customer.get_absolute_url())
 
 
 @staff_required
@@ -164,15 +178,27 @@ def workorder_list(request):
 def workorder_detail(request, pk):
     work_order = get_object_or_404(
         WorkOrder.objects.select_related("customer", "vehicle", "assigned_technician").prefetch_related(
-            "labor_lines", "part_lines", "repair_guides", "inspections"
+            "labor_lines", "part_lines", "repair_guides", "inspections", "time_entries"
         ),
         pk=pk,
     )
     if not _can_touch_work_order(request, work_order):
         raise PermissionDenied
     technicians = Technician.objects.filter(active=True) if request.user.is_staff else None
+    my_technician = getattr(request.user, "technician_profile", None)
+    my_active_time_entry = None
+    if my_technician is not None:
+        my_active_time_entry = work_order.time_entries.filter(
+            technician=my_technician, clock_out__isnull=True
+        ).first()
     return render(
-        request, "shop/workorder_detail.html", {"work_order": work_order, "technicians": technicians}
+        request,
+        "shop/workorder_detail.html",
+        {
+            "work_order": work_order,
+            "technicians": technicians,
+            "my_active_time_entry": my_active_time_entry,
+        },
     )
 
 
@@ -248,8 +274,12 @@ def workorder_update_status(request, pk):
     if request.method == "POST":
         status = request.POST.get("status", "")
         if status in dict(WorkOrder.STATUS_CHOICES):
+            update_fields = ["status", "updated_at"]
             work_order.status = status
-            work_order.save(update_fields=["status", "updated_at"])
+            if status in ("completed", "invoiced", "closed") and work_order.completed_at is None:
+                work_order.completed_at = timezone.now()
+                update_fields.append("completed_at")
+            work_order.save(update_fields=update_fields)
             log_activity(request.user, f"Set WO#{work_order.pk} status to {status}", work_order)
     return redirect(work_order.get_absolute_url())
 
@@ -699,3 +729,138 @@ def reports_dashboard(request):
 def activity_log(request):
     entries = ActivityLogEntry.objects.select_related("user")[:200]
     return render(request, "shop/activity_log.html", {"entries": entries})
+
+
+@staff_required
+def shop_settings_view(request):
+    settings_obj = ShopSettings.get_solo()
+    if request.method == "POST":
+        settings_obj.business_name = request.POST.get("business_name", "").strip()
+        settings_obj.tax_rate_percent = request.POST.get("tax_rate_percent") or 0
+        settings_obj.save()
+        messages.success(request, "Settings saved.")
+        return redirect("shop:settings")
+    return render(request, "shop/settings.html", {"settings": settings_obj})
+
+
+@staff_required
+def workorder_set_warranty(request, pk):
+    work_order = get_object_or_404(WorkOrder, pk=pk)
+    if request.method == "POST":
+        work_order.warranty_months = request.POST.get("warranty_months") or None
+        work_order.warranty_miles = request.POST.get("warranty_miles") or None
+        work_order.save(update_fields=["warranty_months", "warranty_miles"])
+    return redirect(work_order.get_absolute_url())
+
+
+@staff_required
+def workorder_create_invoice(request, pk):
+    work_order = get_object_or_404(WorkOrder, pk=pk)
+    if request.method == "POST" and not hasattr(work_order, "invoice"):
+        invoice_number = f"INV-{work_order.pk:05d}"
+        invoice = Invoice.objects.create(work_order=work_order, invoice_number=invoice_number)
+        work_order.status = "invoiced"
+        work_order.save(update_fields=["status", "updated_at"])
+        log_activity(request.user, f"Created {invoice_number} for WO#{work_order.pk}", invoice)
+        return redirect("shop:invoice_detail", pk=invoice.pk)
+    if hasattr(work_order, "invoice"):
+        return redirect("shop:invoice_detail", pk=work_order.invoice.pk)
+    return redirect(work_order.get_absolute_url())
+
+
+@staff_required
+def invoice_detail(request, pk):
+    invoice = get_object_or_404(
+        Invoice.objects.select_related("work_order", "work_order__customer", "work_order__vehicle").prefetch_related(
+            "payments"
+        ),
+        pk=pk,
+    )
+    return render(request, "shop/invoice_detail.html", {"invoice": invoice})
+
+
+@staff_required
+def invoice_add_payment(request, pk):
+    invoice = get_object_or_404(Invoice, pk=pk)
+    if request.method == "POST":
+        PaymentRecord.objects.create(
+            invoice=invoice,
+            amount=request.POST.get("amount") or 0,
+            method=request.POST.get("method", "card"),
+            notes=request.POST.get("notes", "").strip(),
+        )
+        if invoice.is_fully_paid and not invoice.paid:
+            invoice.paid = True
+            invoice.paid_date = timezone.localdate()
+            invoice.save(update_fields=["paid", "paid_date"])
+    return redirect("shop:invoice_detail", pk=invoice.pk)
+
+
+@staff_required
+def export_invoices_csv(request):
+    start = request.GET.get("start", "")
+    end = request.GET.get("end", "")
+    invoices = Invoice.objects.select_related("work_order", "work_order__customer").prefetch_related("payments")
+    if start:
+        invoices = invoices.filter(issued_date__gte=start)
+    if end:
+        invoices = invoices.filter(issued_date__lte=end)
+
+    response = HttpResponse(content_type="text/csv")
+    response["Content-Disposition"] = 'attachment; filename="repairhub-invoices.csv"'
+    writer = csv.writer(response)
+    writer.writerow(
+        ["Date", "Invoice #", "Customer", "Work Order", "Labor", "Parts", "Tax", "Total", "Amount Paid", "Balance Due"]
+    )
+    for inv in invoices:
+        wo = inv.work_order
+        writer.writerow(
+            [
+                inv.issued_date,
+                inv.invoice_number,
+                wo.customer.name,
+                f"WO#{wo.pk}",
+                wo.labor_total,
+                wo.parts_total,
+                wo.tax_total,
+                wo.grand_total,
+                inv.amount_paid,
+                inv.balance_due,
+            ]
+        )
+    return response
+
+
+def _tech_or_403(request):
+    tech = getattr(request.user, "technician_profile", None)
+    if tech is None:
+        raise PermissionDenied("Time clock is only available to technician accounts.")
+    return tech
+
+
+@login_required
+def workorder_clock_in(request, pk):
+    work_order = get_object_or_404(WorkOrder, pk=pk)
+    technician = _tech_or_403(request)
+    if not _can_touch_work_order(request, work_order):
+        raise PermissionDenied
+    if request.method == "POST":
+        if not TimeEntry.objects.filter(work_order=work_order, technician=technician, clock_out__isnull=True).exists():
+            TimeEntry.objects.create(work_order=work_order, technician=technician)
+    return redirect(work_order.get_absolute_url())
+
+
+@login_required
+def workorder_clock_out(request, pk):
+    work_order = get_object_or_404(WorkOrder, pk=pk)
+    technician = _tech_or_403(request)
+    if not _can_touch_work_order(request, work_order):
+        raise PermissionDenied
+    if request.method == "POST":
+        entry = TimeEntry.objects.filter(
+            work_order=work_order, technician=technician, clock_out__isnull=True
+        ).first()
+        if entry:
+            entry.clock_out = timezone.now()
+            entry.save(update_fields=["clock_out"])
+    return redirect(work_order.get_absolute_url())

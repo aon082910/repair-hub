@@ -6,7 +6,16 @@
   <form method="post">
     {% csrf_token %}
     <label>VIN (optional — auto-fills fields below via NHTSA lookup)</label>
-    <input type="text" id="vin" name="vin" maxlength="17" placeholder="17-character VIN">
+    <div style="display:flex;gap:0.5rem;">
+      <input type="text" id="vin" name="vin" maxlength="17" placeholder="17-character VIN" style="flex:1;">
+      <button type="button" id="scan-vin-btn" class="btn secondary" style="white-space:nowrap;">Scan Barcode</button>
+    </div>
+    <div id="scan-vin-panel" style="display:none;margin-top:0.5rem;">
+      <video id="scan-vin-video" style="width:100%;border-radius:6px;background:#000;" playsinline></video>
+      <p class="muted" style="font-size:0.85rem;">Point the camera at the VIN barcode (usually on the driver's door jamb sticker).</p>
+      <button type="button" id="scan-vin-cancel" class="btn secondary">Cancel</button>
+    </div>
+    <p id="scan-vin-unsupported" class="muted" style="font-size:0.8rem;display:none;">Barcode scanning isn't supported in this browser — try Chrome on Android, or type the VIN manually.</p>
     <label>Year</label>
     <input type="number" id="year" name="year" required min="1950" max="2100">
     <label>Make</label>
@@ -36,5 +45,55 @@ document.getElementById('vin').addEventListener('change', async function () {
     console.warn('VIN lookup unavailable (offline?)', e);
   }
 });
+
+(function () {
+  const scanBtn = document.getElementById('scan-vin-btn');
+  const cancelBtn = document.getElementById('scan-vin-cancel');
+  const panel = document.getElementById('scan-vin-panel');
+  const video = document.getElementById('scan-vin-video');
+  const unsupported = document.getElementById('scan-vin-unsupported');
+  let stream = null;
+  let detectTimer = null;
+
+  if (typeof BarcodeDetector === 'undefined') {
+    scanBtn.style.display = 'none';
+    unsupported.style.display = 'block';
+    return;
+  }
+
+  function stop() {
+    if (detectTimer) clearInterval(detectTimer);
+    if (stream) stream.getTracks().forEach(t => t.stop());
+    stream = null;
+    panel.style.display = 'none';
+  }
+
+  scanBtn.addEventListener('click', async function () {
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+      video.srcObject = stream;
+      await video.play();
+      panel.style.display = 'block';
+      const detector = new BarcodeDetector({ formats: ['code_39', 'code_128'] });
+      detectTimer = setInterval(async function () {
+        try {
+          const barcodes = await detector.detect(video);
+          if (barcodes.length) {
+            const vin = barcodes[0].rawValue.trim().toUpperCase();
+            if (vin.length === 17) {
+              document.getElementById('vin').value = vin;
+              document.getElementById('vin').dispatchEvent(new Event('change'));
+              stop();
+            }
+          }
+        } catch (e) { /* keep trying */ }
+      }, 400);
+    } catch (e) {
+      alert('Could not access the camera: ' + e.message);
+    }
+  });
+
+  cancelBtn.addEventListener('click', stop);
+})();
 </script>
 {% endblock %}

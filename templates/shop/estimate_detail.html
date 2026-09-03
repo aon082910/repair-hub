@@ -81,6 +81,7 @@
 </div>
 
 <div class="card" style="text-align:right;">
+  <p class="muted">Labor: ${{ estimate.labor_total|floatformat:2 }} &nbsp; Parts: ${{ estimate.parts_total|floatformat:2 }} &nbsp; Tax: ${{ estimate.tax_total|floatformat:2 }}{% if estimate.customer.tax_exempt %} (tax-exempt){% endif %}</p>
   <h3>Total: ${{ estimate.grand_total|floatformat:2 }}</h3>
 </div>
 {% endblock %}

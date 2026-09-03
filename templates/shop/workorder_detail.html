@@ -40,6 +40,67 @@
   </div>
 
   {% if user.is_staff %}<a class="btn secondary" href="{% url 'shop:workorder_pdf' work_order.pk %}">Download PDF</a>{% endif %}
+
+  {% if work_order.invoice %}
+  <a class="btn secondary" href="{% url 'shop:invoice_detail' work_order.invoice.pk %}">View Invoice</a>
+  {% elif user.is_staff %}
+  <form method="post" action="{% url 'shop:workorder_create_invoice' work_order.pk %}">
+    {% csrf_token %}
+    <button class="btn secondary" type="submit">Create Invoice</button>
+  </form>
+  {% endif %}
+</div>
+
+{% if user.technician_profile %}
+<div class="card" style="display:flex;gap:0.75rem;align-items:center;">
+  {% if my_active_time_entry %}
+  <form method="post" action="{% url 'shop:workorder_clock_out' work_order.pk %}">
+    {% csrf_token %}
+    <button class="btn" type="submit">Clock Out</button>
+  </form>
+  <span class="muted">Clocked in since {{ my_active_time_entry.clock_in|date:"g:i A" }}</span>
+  {% else %}
+  <form method="post" action="{% url 'shop:workorder_clock_in' work_order.pk %}">
+    {% csrf_token %}
+    <button class="btn secondary" type="submit">Clock In</button>
+  </form>
+  {% endif %}
+</div>
+{% endif %}
+
+{% if work_order.time_entries.all %}
+<div class="section-title">Time Log</div>
+<div class="card">
+  <table>
+    <tr><th>Technician</th><th>Clock In</th><th>Clock Out</th><th>Hours</th></tr>
+    {% for e in work_order.time_entries.all %}
+    <tr>
+      <td>{{ e.technician }}</td>
+      <td>{{ e.clock_in|date:"M j, g:i A" }}</td>
+      <td>{% if e.clock_out %}{{ e.clock_out|date:"M j, g:i A" }}{% else %}<span class="badge status-open">Active</span>{% endif %}</td>
+      <td>{{ e.duration_hours }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+</div>
+{% endif %}
+
+<div class="section-title">Warranty</div>
+<div class="card">
+  {% if work_order.warranty_expiration_date %}
+  <p>
+    {% if work_order.is_under_warranty %}<span class="badge status-completed">Under Warranty</span>{% else %}<span class="badge">Warranty Expired</span>{% endif %}
+    until {{ work_order.warranty_expiration_date|date:"M j, Y" }}{% if work_order.warranty_miles %} or {{ work_order.warranty_miles }} mi{% endif %}
+  </p>
+  {% else %}
+  <p class="muted">No warranty set.</p>
+  {% endif %}
+  <form method="post" action="{% url 'shop:workorder_set_warranty' work_order.pk %}" style="display:flex;gap:0.5rem;align-items:end;flex-wrap:wrap;">
+    {% csrf_token %}
+    <div><label>Warranty (months)</label><input type="number" name="warranty_months" value="{{ work_order.warranty_months|default:'' }}" style="width:120px;"></div>
+    <div><label>Warranty (miles)</label><input type="number" name="warranty_miles" value="{{ work_order.warranty_miles|default:'' }}" style="width:120px;"></div>
+    <button class="btn secondary" type="submit">Save</button>
+  </form>
 </div>
 
 <div class="section-title">Inspections</div>
@@ -138,7 +199,7 @@ document.getElementById('inv-part-select').addEventListener('change', function (
 </script>
 
 <div class="card" style="text-align:right;">
-  <p class="muted">Labor: ${{ work_order.labor_total|floatformat:2 }} &nbsp; Parts: ${{ work_order.parts_total|floatformat:2 }}</p>
+  <p class="muted">Labor: ${{ work_order.labor_total|floatformat:2 }} &nbsp; Parts: ${{ work_order.parts_total|floatformat:2 }} &nbsp; Tax: ${{ work_order.tax_total|floatformat:2 }}{% if work_order.customer.tax_exempt %} (tax-exempt){% endif %}</p>
   <h3>Total: ${{ work_order.grand_total|floatformat:2 }}</h3>
 </div>
 {% endblock %}

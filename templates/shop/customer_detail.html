@@ -1,11 +1,15 @@
 {% extends "base.html" %}
 {% block title %}{{ customer.name }} - Repair-Hub{% endblock %}
 {% block content %}
-<h2>{{ customer.name }}</h2>
+<h2>{{ customer.name }} {% if customer.tax_exempt %}<span class="badge">Tax-Exempt</span>{% endif %}</h2>
 <p class="muted">{{ customer.phone }} · {{ customer.email }} · {{ customer.address }}</p>
 <p>
   <a class="btn secondary" href="{% url 'shop:estimate_create' customer.pk %}">+ New Estimate</a>
   <a class="btn secondary" href="{% url 'shop:appointment_create' %}?customer={{ customer.pk }}">+ New Appointment</a>
+  <form method="post" action="{% url 'shop:customer_toggle_tax_exempt' customer.pk %}" style="display:inline;">
+    {% csrf_token %}
+    <button class="btn secondary" type="submit">{% if customer.tax_exempt %}Remove{% else %}Mark{% endif %} Tax-Exempt</button>
+  </form>
 </p>
 
 <div class="card">

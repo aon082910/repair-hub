@@ -1,8 +1,10 @@
+import datetime
 from decimal import Decimal
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import reverse
+from django.utils import timezone
 
 from vehicles.models import Make, Vehicle, VehicleModel
 
@@ -11,10 +13,13 @@ from .models import (
     Customer,
     Estimate,
     Inspection,
+    Invoice,
     InventoryPart,
     LaborLine,
     PartLine,
+    ShopSettings,
     Technician,
+    TimeEntry,
     WorkOrder,
 )
 
@@ -47,8 +52,67 @@ class WorkOrderTotalsTests(TestCase):
     def test_grand_total_zero_with_no_lines(self):
         self.assertEqual(self.wo.grand_total, Decimal("0.00"))
 
+    def test_tax_applied_when_rate_set(self):
+        settings_obj = ShopSettings.get_solo()
+        settings_obj.tax_rate_percent = Decimal("10.00")
+        settings_obj.save()
+        LaborLine.objects.create(work_order=self.wo, description="Labor", hours=1, rate=Decimal("100"))
+        self.assertEqual(self.wo.tax_total, Decimal("10.00"))
+        self.assertEqual(self.wo.grand_total, Decimal("110.00"))
+
+    def test_tax_exempt_customer_pays_no_tax(self):
+        settings_obj = ShopSettings.get_solo()
+        settings_obj.tax_rate_percent = Decimal("10.00")
+        settings_obj.save()
+        self.customer.tax_exempt = True
+        self.customer.save()
+        LaborLine.objects.create(work_order=self.wo, description="Labor", hours=1, rate=Decimal("100"))
+        self.assertEqual(self.wo.tax_total, Decimal("0.00"))
+        self.assertEqual(self.wo.grand_total, Decimal("100.00"))
+
+    def test_no_tax_when_rate_is_zero(self):
+        LaborLine.objects.create(work_order=self.wo, description="Labor", hours=1, rate=Decimal("100"))
+        self.assertEqual(self.wo.tax_total, Decimal("0.00"))
+
     def test_portal_url_uses_access_token(self):
         self.assertIn(str(self.wo.access_token), self.wo.get_portal_url())
+
+
+class WarrantyTests(TestCase):
+    def setUp(self):
+        self.customer = Customer.objects.create(name="Jane")
+        self.vehicle = make_vehicle()
+
+    def test_under_warranty_when_recently_completed(self):
+        wo = WorkOrder.objects.create(
+            customer=self.customer, vehicle=self.vehicle, complaint="Brakes",
+            warranty_months=12, completed_at=timezone.now(),
+        )
+        self.assertTrue(wo.is_under_warranty)
+        self.assertIsNotNone(wo.warranty_expiration_date)
+
+    def test_not_under_warranty_when_expired(self):
+        wo = WorkOrder.objects.create(
+            customer=self.customer, vehicle=self.vehicle, complaint="Brakes",
+            warranty_months=1, completed_at=timezone.now() - datetime.timedelta(days=200),
+        )
+        self.assertFalse(wo.is_under_warranty)
+
+    def test_no_warranty_set_is_not_under_warranty(self):
+        wo = WorkOrder.objects.create(customer=self.customer, vehicle=self.vehicle, complaint="Brakes")
+        self.assertFalse(wo.is_under_warranty)
+        self.assertIsNone(wo.warranty_expiration_date)
+
+    def test_mileage_warranty_exceeded_voids_warranty(self):
+        wo = WorkOrder.objects.create(
+            customer=self.customer, vehicle=self.vehicle, complaint="Brakes",
+            warranty_months=12, warranty_miles=1000, odometer=10000,
+            completed_at=timezone.now(),
+        )
+        WorkOrder.objects.create(
+            customer=self.customer, vehicle=self.vehicle, complaint="later reading", odometer=12000
+        )
+        self.assertFalse(wo.is_under_warranty)
 
 
 class WorkOrderAccessControlTests(TestCase):
@@ -380,6 +444,20 @@ class ActivityLogTests(TestCase):
         self.assertContains(resp, f"WO#{self.wo.pk}")
         self.assertContains(resp, "in_progress")
 
+    def test_completing_status_sets_completed_at(self):
+        self.assertIsNone(self.wo.completed_at)
+        self.client.post(reverse("shop:workorder_update_status", args=[self.wo.pk]), {"status": "completed"})
+        self.wo.refresh_from_db()
+        self.assertIsNotNone(self.wo.completed_at)
+
+    def test_completed_at_not_overwritten_on_repeat_save(self):
+        self.client.post(reverse("shop:workorder_update_status", args=[self.wo.pk]), {"status": "completed"})
+        self.wo.refresh_from_db()
+        first_completed_at = self.wo.completed_at
+        self.client.post(reverse("shop:workorder_update_status", args=[self.wo.pk]), {"status": "closed"})
+        self.wo.refresh_from_db()
+        self.assertEqual(self.wo.completed_at, first_completed_at)
+
     def test_customer_creation_logged(self):
         self.client.post(reverse("shop:customer_create"), {"name": "New Customer", "phone": "", "email": "", "address": ""})
         resp = self.client.get(reverse("shop:activity_log"))
@@ -419,3 +497,116 @@ class PDFExportTests(TestCase):
         self.client.logout()
         resp = self.client.get(reverse("shop:workorder_pdf", args=[self.wo.pk]))
         self.assertEqual(resp.status_code, 302)
+
+
+class InvoiceAndPaymentTests(TestCase):
+    def setUp(self):
+        make_staff()
+        self.client.login(username="staff", password="pw")
+        self.customer = Customer.objects.create(name="Jane")
+        self.vehicle = make_vehicle()
+        self.wo = WorkOrder.objects.create(customer=self.customer, vehicle=self.vehicle, complaint="Brakes")
+        LaborLine.objects.create(work_order=self.wo, description="Labor", hours=1, rate=Decimal("100"))
+
+    def test_create_invoice_from_work_order(self):
+        resp = self.client.post(reverse("shop:workorder_create_invoice", args=[self.wo.pk]))
+        self.wo.refresh_from_db()
+        self.assertEqual(self.wo.status, "invoiced")
+        self.assertTrue(hasattr(self.wo, "invoice"))
+        self.assertEqual(resp.status_code, 302)
+
+    def test_cannot_create_second_invoice(self):
+        self.client.post(reverse("shop:workorder_create_invoice", args=[self.wo.pk]))
+        invoice_id_first = self.wo.invoice.pk
+        self.client.post(reverse("shop:workorder_create_invoice", args=[self.wo.pk]))
+        self.wo.refresh_from_db()
+        self.assertEqual(self.wo.invoice.pk, invoice_id_first)
+        self.assertEqual(Invoice.objects.filter(work_order=self.wo).count(), 1)
+
+    def test_payment_reduces_balance_and_marks_paid(self):
+        self.client.post(reverse("shop:workorder_create_invoice", args=[self.wo.pk]))
+        invoice = self.wo.invoice
+        self.assertEqual(invoice.balance_due, Decimal("100.00"))
+
+        self.client.post(
+            reverse("shop:invoice_add_payment", args=[invoice.pk]), {"amount": "60", "method": "cash"}
+        )
+        invoice.refresh_from_db()
+        self.assertEqual(invoice.amount_paid, Decimal("60.00"))
+        self.assertEqual(invoice.balance_due, Decimal("40.00"))
+        self.assertFalse(invoice.paid)
+
+        self.client.post(
+            reverse("shop:invoice_add_payment", args=[invoice.pk]), {"amount": "40", "method": "card"}
+        )
+        invoice.refresh_from_db()
+        self.assertTrue(invoice.is_fully_paid)
+        self.assertTrue(invoice.paid)
+
+    def test_export_csv_contains_invoice(self):
+        self.client.post(reverse("shop:workorder_create_invoice", args=[self.wo.pk]))
+        resp = self.client.get(reverse("shop:export_invoices_csv"))
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn("text/csv", resp["Content-Type"])
+        body = resp.content.decode()
+        self.assertIn(self.wo.invoice.invoice_number, body)
+
+
+class TaxExemptToggleTests(TestCase):
+    def test_toggle_flips_and_persists(self):
+        make_staff()
+        client_login_ok = self.client.login(username="staff", password="pw")
+        self.assertTrue(client_login_ok)
+        customer = Customer.objects.create(name="Jane")
+        self.assertFalse(customer.tax_exempt)
+        self.client.post(reverse("shop:customer_toggle_tax_exempt", args=[customer.pk]))
+        customer.refresh_from_db()
+        self.assertTrue(customer.tax_exempt)
+        self.client.post(reverse("shop:customer_toggle_tax_exempt", args=[customer.pk]))
+        customer.refresh_from_db()
+        self.assertFalse(customer.tax_exempt)
+
+
+class TimeClockTests(TestCase):
+    def setUp(self):
+        self.tech_user = User.objects.create_user(username="bob", password="pw")
+        self.technician = Technician.objects.create(user=self.tech_user, name="Bob")
+        self.customer = Customer.objects.create(name="Jane")
+        self.vehicle = make_vehicle()
+        self.wo = WorkOrder.objects.create(
+            customer=self.customer, vehicle=self.vehicle, complaint="Brakes", assigned_technician=self.technician
+        )
+        self.client.login(username="bob", password="pw")
+
+    def test_clock_in_creates_active_entry(self):
+        self.client.post(reverse("shop:workorder_clock_in", args=[self.wo.pk]))
+        entry = TimeEntry.objects.get(work_order=self.wo, technician=self.technician)
+        self.assertTrue(entry.is_active)
+
+    def test_clock_in_twice_does_not_duplicate(self):
+        self.client.post(reverse("shop:workorder_clock_in", args=[self.wo.pk]))
+        self.client.post(reverse("shop:workorder_clock_in", args=[self.wo.pk]))
+        self.assertEqual(TimeEntry.objects.filter(work_order=self.wo, technician=self.technician).count(), 1)
+
+    def test_clock_out_closes_entry(self):
+        self.client.post(reverse("shop:workorder_clock_in", args=[self.wo.pk]))
+        self.client.post(reverse("shop:workorder_clock_out", args=[self.wo.pk]))
+        entry = TimeEntry.objects.get(work_order=self.wo, technician=self.technician)
+        self.assertFalse(entry.is_active)
+        self.assertIsNotNone(entry.clock_out)
+
+    def test_unassigned_technician_cannot_clock_in(self):
+        other_user = User.objects.create_user(username="alice", password="pw")
+        Technician.objects.create(user=other_user, name="Alice")
+        self.client.logout()
+        self.client.login(username="alice", password="pw")
+        resp = self.client.post(reverse("shop:workorder_clock_in", args=[self.wo.pk]))
+        self.assertEqual(resp.status_code, 403)
+
+    def test_customer_cannot_clock_in(self):
+        cust_user = User.objects.create_user(username="cust", password="pw")
+        Customer.objects.create(name="Someone", user=cust_user)
+        self.client.logout()
+        self.client.login(username="cust", password="pw")
+        resp = self.client.post(reverse("shop:workorder_clock_in", args=[self.wo.pk]))
+        self.assertEqual(resp.status_code, 403)
