@@ -1,5 +1,7 @@
 # Repair-Hub
 
+[![Test](https://github.com/aon082910/repair-hub/actions/workflows/test.yml/badge.svg)](https://github.com/aon082910/repair-hub/actions/workflows/test.yml)
+
 A self-hosted repair-reference and shop-management app: vehicles, repair
 guides (steps + photos), wiring diagrams, a diagnostic trouble code (DTC)
 lookup, and customer/work-order/invoice tracking. Runs entirely offline on
@@ -306,6 +308,31 @@ Run this after any change before deploying — it's much faster than the
 manual click-through testing this project relied on during initial
 development, and it'll catch a broken permission check or a regressed
 workflow immediately.
+
+`.github/workflows/test.yml` runs this same suite automatically on every
+push and pull request to `main`.
+
+## Releasing a new version
+
+`.github/workflows/docker-publish.yml` builds and pushes
+`allornothing/repair-hub` to Docker Hub (tagged `latest` and the version
+number) whenever a tag matching `v*.*.*` is pushed:
+
+```bash
+git tag v1.1.0
+git push origin v1.1.0
+```
+
+**One-time setup**, before the first release: add two repository secrets
+under **Settings → Secrets and variables → Actions**:
+- `DOCKERHUB_USERNAME` — your Docker Hub username
+- `DOCKERHUB_TOKEN` — a Docker Hub **access token** (Docker Hub →
+  Account Settings → Security → New Access Token; not your account
+  password), scoped to read/write on this repository
+
+After a release publishes, bump `<Date>`/`<Changes>` in
+[`repair-hub.xml`](https://github.com/aon082910/AoN-Unraid-Apps/blob/main/Repair-Hub/repair-hub.xml)
+in the template repo so Unraid users see there's an update.
 
 ## Project layout
 
