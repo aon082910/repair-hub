@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}My Work Orders - Repair-Hub{% endblock %}
+{% block content %}
+<h2>Welcome, {{ technician.name }}</h2>
+<div class="section-title">My Assigned Work Orders</div>
+<div class="card">
+  {% if work_orders %}
+  <table>
+    <tr><th>#</th><th>Vehicle</th><th>Customer</th><th>Status</th></tr>
+    {% for wo in work_orders %}
+    <tr>
+      <td><a href="{{ wo.get_absolute_url }}">WO#{{ wo.pk }}</a></td>
+      <td>{{ wo.vehicle }}</td>
+      <td>{{ wo.customer }}</td>
+      <td><span class="badge status-{{ wo.status }}">{{ wo.get_status_display }}</span></td>
+    </tr>
+    {% endfor %}
+  </table>
+  {% else %}
+  <p class="muted">Nothing assigned to you right now.</p>
+  {% endif %}
+</div>
+{% endblock %}

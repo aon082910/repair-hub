@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+{% block title %}Estimate - Repair-Hub{% endblock %}
+{% block content %}
+<div class="card" style="max-width:640px;margin:2rem auto;">
+  <h2 style="margin-top:0;">Repair<span style="color:var(--accent)">-Hub</span> Estimate</h2>
+  <p class="muted">{{ estimate.vehicle }} · Estimate #{{ estimate.pk }}</p>
+  <p><span class="badge status-{{ estimate.status }}" style="font-size:0.95rem;">{{ estimate.get_status_display }}</span></p>
+
+  <div class="section-title">What this covers</div>
+  {{ estimate.notes|linebreaks }}
+
+  {% if estimate.labor_lines.all or estimate.part_lines.all %}
+  <div class="section-title">Line items</div>
+  <table>
+    <tr><th>Description</th><th>Amount</th></tr>
+    {% for l in estimate.labor_lines.all %}
+    <tr><td>{{ l.description }} ({{ l.hours }} hrs)</td><td>${{ l.line_total|floatformat:2 }}</td></tr>
+    {% endfor %}
+    {% for p in estimate.part_lines.all %}
+    <tr><td>{{ p.description }}{% if p.part_number %} ({{ p.part_number }}){% endif %} × {{ p.quantity }}</td><td>${{ p.line_total|floatformat:2 }}</td></tr>
+    {% endfor %}
+  </table>
+  <p style="text-align:right;font-weight:700;">Total: ${{ estimate.grand_total|floatformat:2 }}</p>
+  {% endif %}
+
+  {% if estimate.status == "sent" or estimate.status == "draft" %}
+  <div class="section-title">Your decision</div>
+  <p class="muted">Sign below to approve, or decline without signing.</p>
+  <canvas id="sig-pad" width="560" height="150" style="border:1px solid var(--border);border-radius:6px;background:#fff;touch-action:none;width:100%;max-width:560px;height:150px;"></canvas>
+  <p><button class="btn secondary" type="button" id="sig-clear" style="padding:0.3rem 0.7rem;font-size:0.8rem;">Clear signature</button></p>
+  <form method="post" id="decision-form" style="display:flex;gap:0.75rem;">
+    {% csrf_token %}
+    <input type="hidden" name="signature_data" id="signature_data">
+    <button class="btn" type="submit" name="decision" value="approve">Approve</button>
+    <button class="btn secondary" type="submit" name="decision" value="decline">Decline</button>
+  </form>
+  <script>
+  (function () {
+    const canvas = document.getElementById('sig-pad');
+    const ctx = canvas.getContext('2d');
+    ctx.strokeStyle = '#111';
+    ctx.lineWidth = 2;
+    ctx.lineCap = 'round';
+    let drawing = false;
+
+    function pos(e) {
+      const rect = canvas.getBoundingClientRect();
+      const scaleX = canvas.width / rect.width;
+      const scaleY = canvas.height / rect.height;
+      const point = e.touches ? e.touches[0] : e;
+      return { x: (point.clientX - rect.left) * scaleX, y: (point.clientY - rect.top) * scaleY };
+    }
+    function start(e) { drawing = true; const p = pos(e); ctx.beginPath(); ctx.moveTo(p.x, p.y); e.preventDefault(); }
+    function move(e) { if (!drawing) return; const p = pos(e); ctx.lineTo(p.x, p.y); ctx.stroke(); e.preventDefault(); }
+    function end() { drawing = false; }
+
+    canvas.addEventListener('mousedown', start);
+    canvas.addEventListener('mousemove', move);
+    window.addEventListener('mouseup', end);
+    canvas.addEventListener('touchstart', start);
+    canvas.addEventListener('touchmove', move);
+    canvas.addEventListener('touchend', end);
+
+    document.getElementById('sig-clear').addEventListener('click', function () {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+    });
+
+    document.getElementById('decision-form').addEventListener('submit', function () {
+      document.getElementById('signature_data').value = canvas.toDataURL('image/png');
+    });
+  })();
+  </script>
+  {% elif estimate.status == "approved" %}
+  <p class="muted" style="margin-top:1rem;">You approved this estimate{% if estimate.responded_at %} on {{ estimate.responded_at|date:"M j, Y" }}{% endif %}. The shop will be in touch to schedule the work.</p>
+  {% elif estimate.status == "declined" %}
+  <p class="muted" style="margin-top:1rem;">You declined this estimate. Contact the shop if you'd like to revisit it.</p>
+  {% elif estimate.status == "converted" %}
+  <p class="muted" style="margin-top:1rem;">This estimate has become a work order. Contact the shop for a status link.</p>
+  {% endif %}
+
+  <p class="muted" style="margin-top:1.5rem;">Questions? Contact the shop directly and reference Estimate #{{ estimate.pk }}.</p>
+</div>
+{% endblock %}

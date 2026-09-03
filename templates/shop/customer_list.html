@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}Customers - Repair-Hub{% endblock %}
+{% block content %}
+<div class="search-bar">
+  <form method="get" style="display:flex;gap:0.5rem;flex:1;">
+    <input type="search" name="q" value="{{ query }}" placeholder="Search customers...">
+    <button class="btn secondary" type="submit">Search</button>
+  </form>
+  <a class="btn" href="{% url 'shop:customer_create' %}">+ Add Customer</a>
+</div>
+<div class="card">
+  {% if customers %}
+  <table>
+    <tr><th>Name</th><th>Phone</th><th>Email</th></tr>
+    {% for c in customers %}
+    <tr><td><a href="{{ c.get_absolute_url }}">{{ c.name }}</a></td><td>{{ c.phone }}</td><td>{{ c.email }}</td></tr>
+    {% endfor %}
+  </table>
+  {% else %}
+  <p class="muted">No customers yet.</p>
+  {% endif %}
+</div>
+{% endblock %}

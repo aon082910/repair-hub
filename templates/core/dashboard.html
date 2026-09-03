@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% block title %}Dashboard - Repair-Hub{% endblock %}
+{% block content %}
+<div class="grid">
+  <div class="stat"><div class="num">{{ vehicle_count }}</div><div class="label">Vehicles</div></div>
+  <div class="stat"><div class="num">{{ guide_count }}</div><div class="label">Repair Guides</div></div>
+  <div class="stat"><div class="num">{{ dtc_count }}</div><div class="label">DTC Codes</div></div>
+  <div class="stat"><div class="num">{{ customer_count }}</div><div class="label">Customers</div></div>
+</div>
+
+<div class="section-title">Open Work Orders</div>
+<div class="card">
+  {% if open_work_orders %}
+  <table>
+    <tr><th>#</th><th>Customer</th><th>Vehicle</th><th>Status</th><th>Updated</th></tr>
+    {% for wo in open_work_orders %}
+    <tr>
+      <td><a href="{{ wo.get_absolute_url }}">WO#{{ wo.pk }}</a></td>
+      <td>{{ wo.customer }}</td>
+      <td>{{ wo.vehicle }}</td>
+      <td><span class="badge status-{{ wo.status }}">{{ wo.get_status_display }}</span></td>
+      <td>{{ wo.updated_at|date:"M j, Y" }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+  {% else %}
+  <p class="muted">No open work orders. <a href="{% url 'shop:customer_list' %}">Start one from a customer.</a></p>
+  {% endif %}
+</div>
+
+<div class="section-title">Upcoming Appointments</div>
+<div class="card">
+  {% if upcoming_appointments %}
+  <table>
+    <tr><th>When</th><th>Customer</th><th>Reason</th><th></th></tr>
+    {% for a in upcoming_appointments %}
+    <tr>
+      <td>{{ a.scheduled_at|date:"M j, g:i A" }}</td>
+      <td>{{ a.customer }}</td>
+      <td>{{ a.reason }}</td>
+      <td><a href="{{ a.get_absolute_url }}">View</a></td>
+    </tr>
+    {% endfor %}
+  </table>
+  {% else %}
+  <p class="muted">Nothing scheduled. <a href="{% url 'shop:appointment_calendar' %}">Open the calendar.</a></p>
+  {% endif %}
+</div>
+
+<div class="section-title">Estimates Awaiting Response</div>
+<div class="card">
+  {% if pending_estimates %}
+  <table>
+    <tr><th>Customer</th><th>Vehicle</th><th>Total</th><th></th></tr>
+    {% for e in pending_estimates %}
+    <tr>
+      <td>{{ e.customer }}</td>
+      <td>{{ e.vehicle }}</td>
+      <td>${{ e.grand_total|floatformat:2 }}</td>
+      <td><a href="{{ e.get_absolute_url }}">View</a></td>
+    </tr>
+    {% endfor %}
+  </table>
+  {% else %}
+  <p class="muted">Nothing pending.</p>
+  {% endif %}
+</div>
+
+<div class="section-title">Maintenance Due Soon</div>
+<div class="card">
+  {% if reminders_due %}
+  <table>
+    <tr><th>Vehicle</th><th>Item</th><th>Due</th></tr>
+    {% for r in reminders_due %}
+    <tr>
+      <td><a href="{{ r.vehicle.get_absolute_url }}">{{ r.vehicle }}</a></td>
+      <td>{{ r.description }}</td>
+      <td>{% if r.due_date %}{{ r.due_date|date:"M j, Y" }}{% endif %}{% if r.due_mileage %} · {{ r.due_mileage }} mi{% endif %}</td>
+    </tr>
+    {% endfor %}
+  </table>
+  {% else %}
+  <p class="muted">Nothing due in the next 30 days / 1,000 miles.</p>
+  {% endif %}
+</div>
+{% endblock %}

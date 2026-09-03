@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block title %}Reports - Repair-Hub{% endblock %}
+{% block content %}
+<div class="search-bar">
+  <h2 style="margin:0;flex:1;">Reports</h2>
+  <form method="get" style="display:flex;gap:0.5rem;">
+    <select name="days" onchange="this.form.submit()">
+      <option value="7" {% if days == 7 %}selected{% endif %}>Last 7 days</option>
+      <option value="30" {% if days == 30 %}selected{% endif %}>Last 30 days</option>
+      <option value="90" {% if days == 90 %}selected{% endif %}>Last 90 days</option>
+      <option value="365" {% if days == 365 %}selected{% endif %}>Last year</option>
+    </select>
+  </form>
+</div>
+
+<div class="grid">
+  <div class="stat"><div class="num">${{ total_revenue|floatformat:0 }}</div><div class="label">Revenue</div></div>
+  <div class="stat"><div class="num">{{ order_count }}</div><div class="label">Completed Orders</div></div>
+  <div class="stat"><div class="num">${{ avg_ticket|floatformat:0 }}</div><div class="label">Avg Ticket</div></div>
+</div>
+
+<div class="section-title">Work Orders by Status</div>
+<div class="card">
+  <table>
+    <tr><th>Status</th><th>Count</th></tr>
+    {% for s in status_counts %}
+    <tr><td>{{ s.label }}</td><td>{{ s.count }}</td></tr>
+    {% endfor %}
+  </table>
+</div>
+
+<div class="section-title">Most-Used Repair Guides (this period)</div>
+<div class="card">
+  {% if top_guides %}
+  <table>
+    <tr><th>Guide</th><th>Times Used</th></tr>
+    {% for guide, count in top_guides %}
+    <tr><td><a href="{{ guide.get_absolute_url }}">{{ guide.title }}</a></td><td>{{ count }}</td></tr>
+    {% endfor %}
+  </table>
+  {% else %}
+  <p class="muted">No repair guides linked to work orders in this period.</p>
+  {% endif %}
+</div>
+
+<div class="section-title">Low Stock Parts</div>
+<div class="card">
+  {% if low_stock %}
+  <table>
+    <tr><th>Part</th><th>On Hand</th><th>Reorder Point</th></tr>
+    {% for p in low_stock %}
+    <tr><td>{{ p.part_number }} — {{ p.description }}</td><td>{{ p.quantity_on_hand }}</td><td>{{ p.reorder_point }}</td></tr>
+    {% endfor %}
+  </table>
+  {% else %}
+  <p class="muted">Nothing low on stock.</p>
+  {% endif %}
+</div>
+{% endblock %}

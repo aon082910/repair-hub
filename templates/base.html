@@ -1,0 +1,124 @@
+{% load static %}<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Repair-Hub{% endblock %}</title>
+  <link rel="stylesheet" href="{% static 'css/style.css' %}">
+  <script>
+    (function () {
+      var saved = localStorage.getItem('rh-theme');
+      if (saved) document.documentElement.setAttribute('data-theme', saved);
+    })();
+  </script>
+</head>
+<body>
+{% if user.is_authenticated %}
+  <div class="app-shell">
+    <aside class="sidebar">
+      <a class="brand" href="{% url 'dashboard' %}">Repair<span>-Hub</span></a>
+
+      {% if user.customer_profile %}
+      <div class="nav-section">
+        <div class="nav-label">My Account</div>
+        <a href="{% url 'shop:customer_dashboard' %}">My Vehicles &amp; Service</a>
+      </div>
+      {% elif user.technician_profile %}
+      <div class="nav-section">
+        <div class="nav-label">My Work</div>
+        <a href="{% url 'shop:technician_dashboard' %}">My Work Orders</a>
+      </div>
+      <div class="nav-section">
+        <div class="nav-label">Reference</div>
+        <a href="{% url 'vehicles:list' %}">Vehicles</a>
+        <a href="{% url 'repairguides:list' %}">Repair Guides</a>
+        <a href="{% url 'repairguides:wiring_list' %}">Wiring Diagrams</a>
+        <a href="{% url 'diagnostics:list' %}">DTC Codes</a>
+        <a href="{% url 'repairguides:external_search' %}">Search Free Guides</a>
+        <a href="{% url 'shop:inventory_list' %}">Parts Inventory</a>
+      </div>
+      {% else %}
+      <div class="nav-section">
+        <form method="get" action="{% url 'global_search' %}">
+          <input type="search" name="q" placeholder="Search everything…" style="font-size:0.85rem;">
+        </form>
+      </div>
+
+      <div class="nav-section">
+        <div class="nav-label">Overview</div>
+        <a href="{% url 'dashboard' %}">Dashboard</a>
+        <a href="{% url 'shop:reports' %}">Reports</a>
+      </div>
+
+      <div class="nav-section">
+        <div class="nav-label">Reference</div>
+        <a href="{% url 'vehicles:list' %}">Vehicles</a>
+        <a href="{% url 'repairguides:list' %}">Repair Guides</a>
+        <a href="{% url 'repairguides:wiring_list' %}">Wiring Diagrams</a>
+        <a href="{% url 'diagnostics:list' %}">DTC Codes</a>
+        <a href="{% url 'repairguides:external_search' %}">Search Free Guides</a>
+      </div>
+
+      <div class="nav-section">
+        <div class="nav-label">Shop</div>
+        <a href="{% url 'shop:customer_list' %}">Customers</a>
+        <a href="{% url 'shop:workorder_list' %}">Work Orders</a>
+        <a href="{% url 'shop:estimate_list' %}">Estimates</a>
+        <a href="{% url 'shop:appointment_calendar' %}">Appointments</a>
+        <a href="{% url 'shop:inventory_list' %}">Parts Inventory</a>
+        <a href="{% url 'shop:technician_list' %}">Technicians</a>
+      </div>
+
+      {% if user.is_staff %}
+      <div class="nav-section">
+        <div class="nav-label">Tools</div>
+        <a href="{% url 'repairguides:import' %}">Import Repair Guides</a>
+        <a href="{% url 'diagnostics:import' %}">Import DTC Codes</a>
+        <a href="{% url 'download_backup' %}">Download Backup</a>
+        <a href="{% url 'shop:activity_log' %}">Activity Log</a>
+        <a href="/admin/">Admin</a>
+      </div>
+      {% endif %}
+
+      <div class="nav-section">
+        <div class="nav-label">You</div>
+        <a href="{% url 'favorites' %}">My Favorites</a>
+      </div>
+      {% endif %}
+
+      <div class="nav-section nav-bottom">
+        <button type="button" id="theme-toggle" class="btn secondary" style="width:100%;margin-bottom:0.5rem;">Toggle light/dark</button>
+        <a href="{% url 'logout' %}">Logout ({{ user.username }})</a>
+      </div>
+    </aside>
+    <div class="main-wrap">
+      <main class="container">
+{% else %}
+  <main class="container">
+{% endif %}
+        {% if messages %}
+        <ul class="messages">
+          {% for message in messages %}<li class="msg-{{ message.tags }}">{{ message }}</li>{% endfor %}
+        </ul>
+        {% endif %}
+        {% block content %}{% endblock %}
+{% if user.is_authenticated %}
+      </main>
+    </div>
+  </div>
+{% else %}
+  </main>
+{% endif %}
+<script>
+var themeBtn = document.getElementById('theme-toggle');
+if (themeBtn) {
+  themeBtn.addEventListener('click', function () {
+    var current = document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark';
+    var next = current === 'light' ? 'dark' : 'light';
+    document.documentElement.setAttribute('data-theme', next);
+    localStorage.setItem('rh-theme', next);
+  });
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}Parts Inventory - Repair-Hub{% endblock %}
+{% block content %}
+<div class="search-bar">
+  <h2 style="margin:0;flex:1;">Parts Inventory</h2>
+  {% if user.is_staff %}<a class="btn" href="{% url 'shop:inventory_create' %}">+ Add Part</a>{% endif %}
+</div>
+<div class="card">
+  {% if parts %}
+  <table>
+    <tr><th>Part #</th><th>Description</th><th>On Hand</th><th>Reorder Point</th><th>Price</th><th>Location</th></tr>
+    {% for p in parts %}
+    <tr {% if p.is_low_stock %}style="color:var(--danger);"{% endif %}>
+      <td>{{ p.part_number }}</td>
+      <td>{{ p.description }}</td>
+      <td>{{ p.quantity_on_hand }}{% if p.is_low_stock %} <span class="badge status-waiting_parts">Low</span>{% endif %}</td>
+      <td>{{ p.reorder_point }}</td>
+      <td>${{ p.default_price }}</td>
+      <td>{{ p.location }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+  {% else %}
+  <p class="muted">No parts tracked yet.</p>
+  {% endif %}
+</div>
+{% endblock %}

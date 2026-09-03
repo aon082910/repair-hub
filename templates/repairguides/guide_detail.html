@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% load favorite_tags %}
+{% block title %}{{ guide.title }} - Repair-Hub{% endblock %}
+{% block content %}
+<h2>{{ guide.title }} {% favorite_button guide %}</h2>
+<p class="muted">
+  {{ guide.system }} ·
+  {% if guide.vehicle %}{{ guide.vehicle }}{% else %}{{ guide.make|default:"Any make" }} {{ guide.model|default:"" }}{% if guide.year_start %} ({{ guide.year_start }}–{{ guide.year_end|default:guide.year_start }}){% endif %}{% endif %}
+</p>
+<p><a href="https://www.youtube.com/results?search_query={{ guide.title|urlencode }}+repair" target="_blank" rel="noopener" class="badge">▶ Search YouTube walkthroughs</a></p>
+{% if guide.summary %}<p>{{ guide.summary }}</p>{% endif %}
+
+{% if guide.dtc_codes.all %}
+<div class="section-title">Related DTC Codes</div>
+<div class="card">
+  {% for c in guide.dtc_codes.all %}
+  <a class="badge" href="{% url 'diagnostics:detail' c.code %}" style="margin-right:0.4rem;">{{ c.code }}</a>
+  {% endfor %}
+</div>
+{% endif %}
+
+<div class="section-title">Steps</div>
+{% if guide.steps.all %}
+  {% for step in guide.steps.all %}
+  <div class="step card">
+    <strong>Step {{ step.order }}</strong>
+    {{ step.instructions|linebreaks }}
+    {% if step.torque_spec %}<p class="muted">Torque: {{ step.torque_spec }}</p>{% endif %}
+    {% if step.caution %}<p style="color:var(--warning);">⚠ {{ step.caution }}</p>{% endif %}
+    {% for img in step.images.all %}
+    <img src="{{ img.image.url }}" alt="{{ img.caption }}" style="max-width:100%;border-radius:6px;margin-top:0.5rem;">
+    {% if img.caption %}<p class="muted">{{ img.caption }}</p>{% endif %}
+    {% endfor %}
+  </div>
+  {% endfor %}
+{% else %}
+<div class="card"><p class="muted">No steps added yet.</p></div>
+{% endif %}
+
+{% if extra_images %}
+<div class="section-title">Additional Photos</div>
+<div class="card">
+  {% for img in extra_images %}
+  <img src="{{ img.image.url }}" alt="{{ img.caption }}" style="max-width:100%;border-radius:6px;margin-bottom:0.75rem;">
+  {% if img.caption %}<p class="muted">{{ img.caption }}</p>{% endif %}
+  {% endfor %}
+</div>
+{% endif %}
+{% endblock %}

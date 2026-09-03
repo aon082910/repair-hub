@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% block title %}Estimate #{{ estimate.pk }} - Repair-Hub{% endblock %}
+{% block content %}
+<h2>Estimate #{{ estimate.pk }} <span class="badge">{{ estimate.get_status_display }}</span></h2>
+<p class="muted">
+  <a href="{{ estimate.customer.get_absolute_url }}">{{ estimate.customer }}</a> ·
+  <a href="{{ estimate.vehicle.get_absolute_url }}">{{ estimate.vehicle }}</a>
+</p>
+
+<div class="card" style="display:flex;gap:0.75rem;flex-wrap:wrap;align-items:center;">
+  {% if estimate.status == "draft" %}
+  <form method="post" action="{% url 'shop:estimate_send' estimate.pk %}">
+    {% csrf_token %}
+    <button class="btn secondary" type="submit">Mark as Sent</button>
+  </form>
+  {% endif %}
+  {% if not estimate.work_order and estimate.status != "converted" and estimate.status != "declined" %}
+  <form method="post" action="{% url 'shop:estimate_convert' estimate.pk %}" onsubmit="return confirm('Create a work order from this estimate?');">
+    {% csrf_token %}
+    <button class="btn" type="submit">Convert to Work Order</button>
+  </form>
+  {% endif %}
+  {% if estimate.work_order %}
+  <a class="badge" href="{{ estimate.work_order.get_absolute_url }}">→ WO#{{ estimate.work_order.pk }}</a>
+  {% endif %}
+  <div>
+    <label style="margin:0;">Customer approval link</label>
+    <input type="text" readonly value="{{ request.scheme }}://{{ request.get_host }}{{ estimate.get_portal_url }}" onclick="this.select()" style="width:340px;">
+  </div>
+  <a class="btn secondary" href="{% url 'shop:estimate_pdf' estimate.pk %}">Download PDF</a>
+</div>
+
+{% if estimate.signature_data %}
+<div class="section-title">Customer Signature</div>
+<div class="card">
+  <img src="{{ estimate.signature_data }}" alt="Customer signature" style="max-width:220px;background:#fff;border-radius:6px;">
+  {% if estimate.responded_at %}<p class="muted">Signed {{ estimate.responded_at|date:"M j, Y g:i A" }}</p>{% endif %}
+</div>
+{% endif %}
+
+<div class="section-title">What this covers</div>
+<div class="card">{{ estimate.notes|linebreaks }}</div>
+
+<div class="section-title">Labor</div>
+<div class="card">
+  {% if estimate.labor_lines.all %}
+  <table>
+    <tr><th>Description</th><th>Hours</th><th>Rate</th><th>Total</th></tr>
+    {% for l in estimate.labor_lines.all %}
+    <tr><td>{{ l.description }}</td><td>{{ l.hours }}</td><td>${{ l.rate }}</td><td>${{ l.line_total|floatformat:2 }}</td></tr>
+    {% endfor %}
+  </table>
+  {% endif %}
+  <form method="post" action="{% url 'shop:estimate_add_labor' estimate.pk %}" style="margin-top:0.75rem;display:flex;gap:0.5rem;align-items:end;flex-wrap:wrap;">
+    {% csrf_token %}
+    <div style="flex:2;"><label>Description</label><input type="text" name="description" required></div>
+    <div style="flex:1;"><label>Hours</label><input type="number" step="0.25" name="hours" required></div>
+    <div style="flex:1;"><label>Rate ($/hr)</label><input type="number" step="0.01" name="rate" required></div>
+    <button class="btn secondary" type="submit">Add Labor</button>
+  </form>
+</div>
+
+<div class="section-title">Parts</div>
+<div class="card">
+  {% if estimate.part_lines.all %}
+  <table>
+    <tr><th>Part #</th><th>Description</th><th>Qty</th><th>Unit Price</th><th>Total</th></tr>
+    {% for p in estimate.part_lines.all %}
+    <tr><td>{{ p.part_number }}</td><td>{{ p.description }}</td><td>{{ p.quantity }}</td><td>${{ p.unit_price }}</td><td>${{ p.line_total|floatformat:2 }}</td></tr>
+    {% endfor %}
+  </table>
+  {% endif %}
+  <form method="post" action="{% url 'shop:estimate_add_part' estimate.pk %}" style="margin-top:0.75rem;display:flex;gap:0.5rem;align-items:end;flex-wrap:wrap;">
+    {% csrf_token %}
+    <div style="flex:1;"><label>Part #</label><input type="text" name="part_number"></div>
+    <div style="flex:2;"><label>Description</label><input type="text" name="description" required></div>
+    <div style="flex:1;"><label>Qty</label><input type="number" step="1" name="quantity" value="1" required></div>
+    <div style="flex:1;"><label>Unit Price</label><input type="number" step="0.01" name="unit_price" required></div>
+    <button class="btn secondary" type="submit">Add Part</button>
+  </form>
+</div>
+
+<div class="card" style="text-align:right;">
+  <h3>Total: ${{ estimate.grand_total|floatformat:2 }}</h3>
+</div>
+{% endblock %}

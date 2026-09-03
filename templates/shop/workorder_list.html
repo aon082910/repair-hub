@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}Work Orders - Repair-Hub{% endblock %}
+{% block content %}
+<h2 style="margin-top:0;">Work Orders</h2>
+<p class="muted">Closed orders are hidden from the board — find them from a customer's page.</p>
+<div class="board">
+  {% for col in columns %}
+  <div class="board-col">
+    <h4>{{ col.label }} <span>{{ col.orders|length }}</span></h4>
+    {% for wo in col.orders %}
+    <a class="board-card" href="{{ wo.get_absolute_url }}">
+      <div class="wo-num">WO#{{ wo.pk }}</div>
+      <div class="wo-veh">{{ wo.vehicle }}</div>
+      <div class="wo-cust">{{ wo.customer }}</div>
+    </a>
+    {% empty %}
+    <p class="muted" style="font-size:0.85rem;">Empty</p>
+    {% endfor %}
+  </div>
+  {% endfor %}
+</div>
+{% endblock %}

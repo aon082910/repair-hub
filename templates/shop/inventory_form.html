@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}Add Part - Repair-Hub{% endblock %}
+{% block content %}
+<div class="card" style="max-width:480px;">
+  <h2 style="margin-top:0;">Add Inventory Part</h2>
+  <form method="post">
+    {% csrf_token %}
+    <label>Part Number</label>
+    <input type="text" name="part_number" required>
+    <label>Description</label>
+    <input type="text" name="description" required>
+    <label>Quantity on Hand</label>
+    <input type="number" name="quantity_on_hand" value="0">
+    <label>Reorder Point</label>
+    <input type="number" name="reorder_point" value="0">
+    <label>Unit Cost</label>
+    <input type="number" step="0.01" name="unit_cost" value="0">
+    <label>Default Selling Price</label>
+    <input type="number" step="0.01" name="default_price" value="0">
+    <label>Location</label>
+    <input type="text" name="location">
+    <button class="btn" type="submit" style="margin-top:1.25rem;">Save Part</button>
+  </form>
+</div>
+{% endblock %}

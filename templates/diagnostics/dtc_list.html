@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}DTC Codes - Repair-Hub{% endblock %}
+{% block content %}
+<div class="search-bar">
+  <form method="get" style="display:flex;gap:0.5rem;flex:1;">
+    <input type="search" name="q" value="{{ query }}" placeholder="Search code or description (e.g. P0420)...">
+    <button class="btn secondary" type="submit">Search</button>
+  </form>
+</div>
+<div class="card">
+  {% if codes %}
+  <table>
+    <tr><th>Code</th><th>Description</th><th>System</th><th>Origin</th></tr>
+    {% for c in codes %}
+    <tr>
+      <td><a href="{% url 'diagnostics:detail' c.code %}">{{ c.code }}</a></td>
+      <td>{{ c.description }}</td>
+      <td>{{ c.get_system_display }}</td>
+      <td>{{ c.get_origin_display }}{% if c.make %} ({{ c.make }}){% endif %}</td>
+    </tr>
+    {% endfor %}
+  </table>
+  {% else %}
+  <p class="muted">No DTC codes loaded yet. Run <code>python manage.py seed_dtc_codes</code> to load the generic SAE code set.</p>
+  {% endif %}
+</div>
+{% endblock %}

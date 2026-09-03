@@ -1,0 +1,144 @@
+{% extends "base.html" %}
+{% block title %}WO#{{ work_order.pk }} - Repair-Hub{% endblock %}
+{% block content %}
+<h2>WO#{{ work_order.pk }} <span class="badge status-{{ work_order.status }}">{{ work_order.get_status_display }}</span></h2>
+<p class="muted">
+  <a href="{{ work_order.customer.get_absolute_url }}">{{ work_order.customer }}</a> ·
+  <a href="{{ work_order.vehicle.get_absolute_url }}">{{ work_order.vehicle }}</a>
+  {% if work_order.odometer %} · {{ work_order.odometer }} mi{% endif %}
+</p>
+
+<div class="card" style="display:flex;gap:2rem;flex-wrap:wrap;align-items:center;">
+  <form method="post" action="{% url 'shop:workorder_update_status' work_order.pk %}" style="display:flex;gap:0.5rem;align-items:center;">
+    {% csrf_token %}
+    <label style="margin:0;">Status</label>
+    <select name="status" onchange="this.form.submit()">
+      {% for value, label in work_order.STATUS_CHOICES %}
+      <option value="{{ value }}" {% if value == work_order.status %}selected{% endif %}>{{ label }}</option>
+      {% endfor %}
+    </select>
+  </form>
+
+  {% if technicians is not None %}
+  <form method="post" action="{% url 'shop:workorder_assign_technician' work_order.pk %}" style="display:flex;gap:0.5rem;align-items:center;">
+    {% csrf_token %}
+    <label style="margin:0;">Technician</label>
+    <select name="technician" onchange="this.form.submit()">
+      <option value="">Unassigned</option>
+      {% for t in technicians %}
+      <option value="{{ t.pk }}" {% if work_order.assigned_technician_id == t.pk %}selected{% endif %}>{{ t.name }}</option>
+      {% endfor %}
+    </select>
+  </form>
+  {% elif work_order.assigned_technician %}
+  <p class="muted" style="margin:0;">Technician: {{ work_order.assigned_technician }}</p>
+  {% endif %}
+
+  <div>
+    <label style="margin:0;">Customer status link</label>
+    <input type="text" readonly value="{{ request.scheme }}://{{ request.get_host }}{{ work_order.get_portal_url }}" onclick="this.select()" style="width:340px;">
+  </div>
+
+  {% if user.is_staff %}<a class="btn secondary" href="{% url 'shop:workorder_pdf' work_order.pk %}">Download PDF</a>{% endif %}
+</div>
+
+<div class="section-title">Inspections</div>
+<div class="card">
+  {% if work_order.inspections.all %}
+  {% for i in work_order.inspections.all %}
+  <p><a href="{{ i.get_absolute_url }}">Inspection #{{ i.pk }}</a> — {{ i.created_at|date:"M j, Y" }}</p>
+  {% endfor %}
+  {% else %}
+  <p class="muted">No inspections yet.</p>
+  {% endif %}
+  <form method="post" action="{% url 'shop:inspection_create' work_order.pk %}">
+    {% csrf_token %}
+    <button class="btn secondary" type="submit">Start Inspection</button>
+  </form>
+</div>
+
+<div class="section-title">Complaint</div>
+<div class="card">{{ work_order.complaint|linebreaks }}</div>
+
+{% if work_order.repair_guides.all %}
+<div class="section-title">Linked Repair Guides</div>
+<div class="card">
+  {% for g in work_order.repair_guides.all %}
+  <a class="badge" href="{{ g.get_absolute_url }}" style="margin-right:0.4rem;">{{ g.title }}</a>
+  {% endfor %}
+</div>
+{% endif %}
+
+<div class="section-title">Labor</div>
+<div class="card">
+  {% if work_order.labor_lines.all %}
+  <table>
+    <tr><th>Description</th><th>Hours</th><th>Rate</th><th>Total</th></tr>
+    {% for l in work_order.labor_lines.all %}
+    <tr><td>{{ l.description }}</td><td>{{ l.hours }}</td><td>${{ l.rate }}</td><td>${{ l.line_total|floatformat:2 }}</td></tr>
+    {% endfor %}
+  </table>
+  {% endif %}
+  <form method="post" action="{% url 'shop:workorder_add_labor' work_order.pk %}" style="margin-top:0.75rem;display:flex;gap:0.5rem;align-items:end;flex-wrap:wrap;">
+    {% csrf_token %}
+    <div style="flex:2;"><label>Description</label><input type="text" name="description" required></div>
+    <div style="flex:1;"><label>Hours</label><input type="number" step="0.25" name="hours" required></div>
+    <div style="flex:1;"><label>Rate ($/hr)</label><input type="number" step="0.01" name="rate" required></div>
+    <button class="btn secondary" type="submit">Add Labor</button>
+  </form>
+</div>
+
+<div class="section-title">Parts</div>
+<div class="card">
+  {% if work_order.part_lines.all %}
+  <table>
+    <tr><th>Part #</th><th>Description</th><th>Qty</th><th>Unit Price</th><th>Total</th></tr>
+    {% for p in work_order.part_lines.all %}
+    <tr><td>{{ p.part_number }}</td><td>{{ p.description }}</td><td>{{ p.quantity }}</td><td>${{ p.unit_price }}</td><td>${{ p.line_total|floatformat:2 }}</td></tr>
+    {% endfor %}
+  </table>
+  {% endif %}
+  <form method="post" action="{% url 'shop:workorder_add_part' work_order.pk %}" id="add-part-form" style="margin-top:0.75rem;display:flex;gap:0.5rem;align-items:end;flex-wrap:wrap;">
+    {% csrf_token %}
+    <div style="flex:2;">
+      <label>From inventory (optional)</label>
+      <select id="inv-part-select" name="inventory_part">
+        <option value="">— Manual entry —</option>
+      </select>
+    </div>
+    <div style="flex:1;"><label>Part #</label><input type="text" name="part_number" id="inv-part-number"></div>
+    <div style="flex:2;"><label>Description</label><input type="text" name="description" id="inv-description" required></div>
+    <div style="flex:1;"><label>Qty</label><input type="number" step="1" name="quantity" value="1" required></div>
+    <div style="flex:1;"><label>Unit Price</label><input type="number" step="0.01" name="unit_price" id="inv-unit-price" required></div>
+    <button class="btn secondary" type="submit">Add Part</button>
+  </form>
+</div>
+
+<script>
+fetch('{% url "shop:inventory_parts_json" %}').then(r => r.json()).then(data => {
+  const sel = document.getElementById('inv-part-select');
+  data.parts.forEach(p => {
+    const opt = document.createElement('option');
+    opt.value = p.id;
+    opt.textContent = p.part_number + ' — ' + p.description + ' (' + p.quantity_on_hand + ' on hand)';
+    opt.dataset.partNumber = p.part_number;
+    opt.dataset.description = p.description;
+    opt.dataset.unitPrice = p.unit_price;
+    sel.appendChild(opt);
+  });
+}).catch(() => {});
+
+document.getElementById('inv-part-select').addEventListener('change', function () {
+  const opt = this.options[this.selectedIndex];
+  if (!opt.value) return;
+  document.getElementById('inv-part-number').value = opt.dataset.partNumber || '';
+  document.getElementById('inv-description').value = opt.dataset.description || '';
+  document.getElementById('inv-unit-price').value = opt.dataset.unitPrice || '';
+});
+</script>
+
+<div class="card" style="text-align:right;">
+  <p class="muted">Labor: ${{ work_order.labor_total|floatformat:2 }} &nbsp; Parts: ${{ work_order.parts_total|floatformat:2 }}</p>
+  <h3>Total: ${{ work_order.grand_total|floatformat:2 }}</h3>
+</div>
+{% endblock %}

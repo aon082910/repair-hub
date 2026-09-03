@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+{% block title %}{{ customer.name }} - Repair-Hub{% endblock %}
+{% block content %}
+<h2>{{ customer.name }}</h2>
+<p class="muted">{{ customer.phone }} · {{ customer.email }} · {{ customer.address }}</p>
+<p>
+  <a class="btn secondary" href="{% url 'shop:estimate_create' customer.pk %}">+ New Estimate</a>
+  <a class="btn secondary" href="{% url 'shop:appointment_create' %}?customer={{ customer.pk }}">+ New Appointment</a>
+</p>
+
+<div class="card">
+  {% if customer.user %}
+  <p>Customer login: <strong>{{ customer.user.username }}</strong> — they can sign in and view their own vehicles/work orders at <code>/login/</code>.</p>
+  <form method="post" action="{% url 'shop:customer_create_login' customer.pk %}" onsubmit="return confirm('Reset this customer\'s password? The old one will stop working.');">
+    {% csrf_token %}
+    <button class="btn secondary" type="submit">Reset Password</button>
+  </form>
+  {% else %}
+  <p class="muted">This customer has no login yet — they can only see status via a per-work-order link.</p>
+  <form method="post" action="{% url 'shop:customer_create_login' customer.pk %}">
+    {% csrf_token %}
+    <button class="btn secondary" type="submit">Create Customer Login</button>
+  </form>
+  {% endif %}
+</div>
+
+<div class="section-title">Vehicles</div>
+<div class="card">
+  {% if vehicles %}
+  <table>
+    <tr><th>Vehicle</th><th>VIN</th><th></th></tr>
+    {% for v in vehicles %}
+    <tr>
+      <td><a href="{{ v.get_absolute_url }}">{{ v }}</a></td>
+      <td>{{ v.vin|default:"—" }}</td>
+      <td><a href="{% url 'shop:workorder_create' customer.pk %}">New Work Order</a></td>
+    </tr>
+    {% endfor %}
+  </table>
+  {% else %}
+  <p class="muted">No vehicles on file. Add one from the <a href="{% url 'vehicles:create' %}">Vehicles</a> page (owner can be set in Admin), then start a work order here.</p>
+  {% endif %}
+</div>
+
+<div class="section-title">Work Orders</div>
+<div class="card">
+  {% if work_orders %}
+  <table>
+    <tr><th>#</th><th>Vehicle</th><th>Status</th><th>Created</th></tr>
+    {% for wo in work_orders %}
+    <tr>
+      <td><a href="{{ wo.get_absolute_url }}">WO#{{ wo.pk }}</a></td>
+      <td>{{ wo.vehicle }}</td>
+      <td><span class="badge status-{{ wo.status }}">{{ wo.get_status_display }}</span></td>
+      <td>{{ wo.created_at|date:"M j, Y" }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+  {% else %}
+  <p class="muted">No work orders yet.</p>
+  {% endif %}
+</div>
+
+<div class="section-title">Estimates</div>
+<div class="card">
+  {% if customer.estimates.all %}
+  <table>
+    <tr><th>#</th><th>Vehicle</th><th>Status</th><th>Total</th></tr>
+    {% for e in customer.estimates.all %}
+    <tr>
+      <td><a href="{{ e.get_absolute_url }}">Est#{{ e.pk }}</a></td>
+      <td>{{ e.vehicle }}</td>
+      <td><span class="badge">{{ e.get_status_display }}</span></td>
+      <td>${{ e.grand_total|floatformat:2 }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+  {% else %}
+  <p class="muted">No estimates yet.</p>
+  {% endif %}
+</div>
+
+<div class="section-title">Appointments</div>
+<div class="card">
+  {% if customer.appointments.all %}
+  <table>
+    <tr><th>When</th><th>Reason</th><th>Status</th></tr>
+    {% for a in customer.appointments.all %}
+    <tr>
+      <td><a href="{{ a.get_absolute_url }}">{{ a.scheduled_at|date:"M j, g:i A" }}</a></td>
+      <td>{{ a.reason }}</td>
+      <td><span class="badge">{{ a.get_status_display }}</span></td>
+    </tr>
+    {% endfor %}
+  </table>
+  {% else %}
+  <p class="muted">No appointments yet.</p>
+  {% endif %}
+</div>
+{% endblock %}

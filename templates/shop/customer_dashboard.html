@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% block title %}My Vehicles - Repair-Hub{% endblock %}
+{% block content %}
+<h2>Welcome, {{ customer.name }}</h2>
+
+{% if reminders %}
+<div class="section-title">Maintenance Due Soon</div>
+<div class="card">
+  <table>
+    <tr><th>Vehicle</th><th>Item</th><th>Due</th></tr>
+    {% for r in reminders %}
+    <tr>
+      <td>{{ r.vehicle }}</td>
+      <td>{{ r.description }}</td>
+      <td>{% if r.due_date %}{{ r.due_date|date:"M j, Y" }}{% endif %}{% if r.due_mileage %} · {{ r.due_mileage }} mi{% endif %}</td>
+    </tr>
+    {% endfor %}
+  </table>
+</div>
+{% endif %}
+
+{% if pending_estimates %}
+<div class="section-title">Estimates Awaiting Your Response</div>
+<div class="card">
+  <table>
+    <tr><th>Vehicle</th><th></th></tr>
+    {% for e in pending_estimates %}
+    <tr><td>{{ e.vehicle }}</td><td><a href="{{ e.get_portal_url }}">Review &amp; respond</a></td></tr>
+    {% endfor %}
+  </table>
+</div>
+{% endif %}
+
+{% if upcoming_appointments %}
+<div class="section-title">Upcoming Appointments</div>
+<div class="card">
+  <table>
+    <tr><th>When</th><th>Reason</th><th>Status</th></tr>
+    {% for a in upcoming_appointments %}
+    <tr><td>{{ a.scheduled_at|date:"M j, g:i A" }}</td><td>{{ a.reason }}</td><td><span class="badge">{{ a.get_status_display }}</span></td></tr>
+    {% endfor %}
+  </table>
+</div>
+{% endif %}
+
+<div class="section-title">My Vehicles</div>
+<div class="card">
+  {% if vehicles %}
+  <table>
+    <tr><th>Vehicle</th><th>VIN</th></tr>
+    {% for v in vehicles %}
+    <tr><td>{{ v }}</td><td>{{ v.vin|default:"—" }}</td></tr>
+    {% endfor %}
+  </table>
+  {% else %}
+  <p class="muted">No vehicles on file yet — contact the shop to have one added.</p>
+  {% endif %}
+</div>
+
+<div class="section-title">My Work Orders</div>
+<div class="card">
+  {% if work_orders %}
+  <table>
+    <tr><th>Vehicle</th><th>Status</th><th>Date</th><th></th></tr>
+    {% for wo in work_orders %}
+    <tr>
+      <td>{{ wo.vehicle }}</td>
+      <td><span class="badge status-{{ wo.status }}">{{ wo.get_status_display }}</span></td>
+      <td>{{ wo.created_at|date:"M j, Y" }}</td>
+      <td><a href="{{ wo.get_portal_url }}">View details</a></td>
+    </tr>
+    {% endfor %}
+  </table>
+  {% else %}
+  <p class="muted">No service history yet.</p>
+  {% endif %}
+</div>
+{% endblock %}

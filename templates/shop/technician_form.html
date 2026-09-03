@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}Add Technician - Repair-Hub{% endblock %}
+{% block content %}
+<div class="card" style="max-width:480px;">
+  <h2 style="margin-top:0;">Add Technician</h2>
+  <p class="muted">This creates a login that can view repair reference content and their own assigned work orders — nothing else.</p>
+  <form method="post">
+    {% csrf_token %}
+    <label>Name</label>
+    <input type="text" name="name" required>
+    <label>Phone</label>
+    <input type="tel" name="phone">
+    <button class="btn" type="submit" style="margin-top:1.25rem;">Create Technician Login</button>
+  </form>
+</div>
+{% endblock %}

@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}My Favorites - Repair-Hub{% endblock %}
+{% block content %}
+<h2>My Favorites</h2>
+<div class="card">
+  {% if items %}
+  <table>
+    <tr><th>Type</th><th>Item</th></tr>
+    {% for fav in items %}
+    <tr>
+      <td>{{ fav.content_type.name|title }}</td>
+      <td>
+        {% if fav.content_type.model == "repairguide" %}
+        <a href="{{ fav.content_object.get_absolute_url }}">{{ fav.content_object }}</a>
+        {% elif fav.content_type.model == "dtccode" %}
+        <a href="{% url 'diagnostics:detail' fav.content_object.code %}">{{ fav.content_object }}</a>
+        {% elif fav.content_type.model == "vehicle" %}
+        <a href="{{ fav.content_object.get_absolute_url }}">{{ fav.content_object }}</a>
+        {% else %}
+        {{ fav.content_object }}
+        {% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+  </table>
+  {% else %}
+  <p class="muted">Nothing favorited yet — look for the ☆ Favorite button on a repair guide, DTC code, or vehicle page.</p>
+  {% endif %}
+</div>
+{% endblock %}

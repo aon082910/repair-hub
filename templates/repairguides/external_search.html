@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block title %}Search Free Guides - Repair-Hub{% endblock %}
+{% block content %}
+<h2>Search Free External Guides</h2>
+<p class="muted">
+  Searches <a href="https://www.ifixit.com" target="_blank" rel="noopener">iFixit's</a> free,
+  Creative Commons-licensed guide library via their public API. Results link out to iFixit —
+  Repair-Hub does not copy or store their content.
+</p>
+
+<div class="search-bar">
+  <form method="get" style="display:flex;gap:0.5rem;flex:1;">
+    <input type="search" name="q" value="{{ query }}" placeholder="e.g. alternator, brake caliper, headlight...">
+    <button class="btn secondary" type="submit">Search</button>
+  </form>
+</div>
+
+<div class="card">
+  {% if query and not results %}
+  <p class="muted">No results from iFixit for "{{ query }}" (or the server couldn't reach the internet).</p>
+  {% elif results %}
+  {% for r in results %}
+  <div class="external-result">
+    {% if r.image %}<img src="{{ r.image }}" alt="">{% endif %}
+    <div>
+      <div class="badge">{{ r.source }}</div>
+      <div><a href="{{ r.url }}" target="_blank" rel="noopener"><strong>{{ r.title }}</strong></a></div>
+      {% if r.summary %}<div class="muted">{{ r.summary }}</div>{% endif %}
+    </div>
+  </div>
+  {% endfor %}
+  {% else %}
+  <p class="muted">Enter a search term above.</p>
+  {% endif %}
+</div>
+
+{% if images %}
+<div class="section-title">Reference Photos (Wikimedia Commons)</div>
+<div class="card">
+  <div class="grid">
+    {% for img in images %}
+    <a href="{{ img.page_url }}" target="_blank" rel="noopener" style="text-decoration:none;">
+      <img src="{{ img.thumb_url }}" alt="{{ img.title }}" style="width:100%;border-radius:6px;">
+      <p class="muted" style="font-size:0.75rem;margin:0.25rem 0 0;">{{ img.title|truncatechars:40 }}</p>
+    </a>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}New Work Order - Repair-Hub{% endblock %}
+{% block content %}
+<div class="card" style="max-width:520px;">
+  <h2 style="margin-top:0;">New Work Order for {{ customer.name }}</h2>
+  {% if customer.vehicles.all %}
+  <form method="post">
+    {% csrf_token %}
+    <label>Vehicle</label>
+    <select name="vehicle" required>
+      {% for v in customer.vehicles.all %}
+      <option value="{{ v.pk }}">{{ v }}</option>
+      {% endfor %}
+    </select>
+    <label>Odometer</label>
+    <input type="number" name="odometer" min="0">
+    <label>Complaint / Requested Work</label>
+    <textarea name="complaint" rows="4" required></textarea>
+    <button class="btn" type="submit" style="margin-top:1.25rem;">Create Work Order</button>
+  </form>
+  {% else %}
+  <p class="muted">This customer has no vehicles on file yet. Add a vehicle first (set its owner to this customer in Admin), then come back here.</p>
+  {% endif %}
+</div>
+{% endblock %}

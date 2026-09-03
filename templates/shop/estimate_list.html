@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}Estimates - Repair-Hub{% endblock %}
+{% block content %}
+<h2 style="margin-top:0;">Estimates</h2>
+<div class="card">
+  {% if estimates %}
+  <table>
+    <tr><th>#</th><th>Customer</th><th>Vehicle</th><th>Status</th><th>Total</th><th>Created</th></tr>
+    {% for e in estimates %}
+    <tr>
+      <td><a href="{{ e.get_absolute_url }}">Est#{{ e.pk }}</a></td>
+      <td>{{ e.customer }}</td>
+      <td>{{ e.vehicle }}</td>
+      <td><span class="badge">{{ e.get_status_display }}</span></td>
+      <td>${{ e.grand_total|floatformat:2 }}</td>
+      <td>{{ e.created_at|date:"M j, Y" }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+  {% else %}
+  <p class="muted">No open estimates. Start one from a customer's page.</p>
+  {% endif %}
+</div>
+{% endblock %}

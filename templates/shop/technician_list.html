@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}Technicians - Repair-Hub{% endblock %}
+{% block content %}
+<div class="search-bar">
+  <h2 style="margin:0;flex:1;">Technicians</h2>
+  <a class="btn" href="{% url 'shop:technician_create' %}">+ Add Technician</a>
+</div>
+<div class="card">
+  {% if technicians %}
+  <table>
+    <tr><th>Name</th><th>Phone</th><th>Active</th><th>Open Work Orders</th></tr>
+    {% for t in technicians %}
+    <tr>
+      <td>{{ t.name }}</td>
+      <td>{{ t.phone }}</td>
+      <td>{{ t.active|yesno:"Yes,No" }}</td>
+      <td>{{ t.work_orders.count }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+  {% else %}
+  <p class="muted">No technicians yet.</p>
+  {% endif %}
+</div>
+{% endblock %}

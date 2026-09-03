@@ -1,0 +1,276 @@
+{% extends "base.html" %}
+{% load favorite_tags %}
+{% block title %}{{ vehicle }} - Repair-Hub{% endblock %}
+{% block content %}
+<h2>{{ vehicle }} {% favorite_button vehicle %}</h2>
+<p class="muted">VIN: {{ vehicle.vin|default:"—" }} · Owner: {{ vehicle.owner|default:"—" }}{% if vehicle.engine %} · Engine: {{ vehicle.engine }}{% endif %}</p>
+<p>
+  <a href="https://www.youtube.com/results?search_query={{ vehicle|urlencode }}+repair" target="_blank" rel="noopener" class="badge">▶ Search YouTube walkthroughs</a>
+  <a href="#" onclick="document.getElementById('qr-popup').style.display='flex';return false;" class="badge">▦ QR service-history tag</a>
+</p>
+
+<div id="qr-popup" onclick="this.style.display='none';" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:10;align-items:center;justify-content:center;">
+  <div class="card" style="text-align:center;max-width:280px;" onclick="event.stopPropagation();">
+    <p class="muted">Print this and stick it on the vehicle — scanning it opens a read-only service history.</p>
+    <img src="{% url 'vehicles:qr_code' vehicle.pk %}" alt="QR code" style="width:200px;height:200px;">
+    <p style="margin-top:0.5rem;"><button class="btn secondary" type="button" onclick="document.getElementById('qr-popup').style.display='none';">Close</button></p>
+  </div>
+</div>
+
+<div class="tabs">
+  <button class="tab-btn active" data-tab="guides">Repair Guides</button>
+  <button class="tab-btn" data-tab="wiring">Wiring Diagrams</button>
+  <button class="tab-btn" data-tab="maintenance">Maintenance</button>
+  <button class="tab-btn" data-tab="specs">Specs</button>
+  <button class="tab-btn" data-tab="photos">Reference Photos</button>
+  <button class="tab-btn" data-tab="recalls">Recalls &amp; Complaints</button>
+  <button class="tab-btn" data-tab="alldata">ALLDATA</button>
+</div>
+
+<div class="tab-panel active" id="tab-guides">
+  <div class="card">
+    {% if guides %}
+    <table>
+      <tr><th>Title</th><th>System</th></tr>
+      {% for g in guides %}
+      <tr><td><a href="{{ g.get_absolute_url }}">{{ g.title }}</a></td><td>{{ g.system }}</td></tr>
+      {% endfor %}
+    </table>
+    {% else %}
+    <p class="muted">No repair guides attached to this specific vehicle yet. Add them via <a href="/admin/">Admin</a>, the <a href="{% url 'repairguides:import' %}">bulk importer</a>, or check <a href="{% url 'repairguides:external_search' %}">free external guides</a>.</p>
+    {% endif %}
+  </div>
+</div>
+
+<div class="tab-panel" id="tab-wiring">
+  <div class="card">
+    {% if diagrams %}
+    <table>
+      <tr><th>Title</th><th>System</th><th>File</th></tr>
+      {% for d in diagrams %}
+      <tr><td>{{ d.title }}</td><td>{{ d.system }}</td><td><a href="{{ d.file.url }}" target="_blank" rel="noopener">Open</a></td></tr>
+      {% endfor %}
+    </table>
+    {% else %}
+    <p class="muted">No wiring diagrams attached yet. Add them via <a href="/admin/">Admin</a>.</p>
+    {% endif %}
+  </div>
+</div>
+
+<div class="tab-panel" id="tab-maintenance">
+  <div class="card">
+    {% if reminders %}
+    <table>
+      <tr><th>Item</th><th>Due</th><th>Status</th><th></th></tr>
+      {% for r in reminders %}
+      <tr>
+        <td>{{ r.description }}</td>
+        <td>{% if r.due_date %}{{ r.due_date|date:"M j, Y" }}{% endif %}{% if r.due_mileage %} · {{ r.due_mileage }} mi{% endif %}</td>
+        <td>
+          {% if r.completed %}<span class="badge status-completed">Done</span>
+          {% elif r.is_overdue %}<span class="badge status-waiting_parts">Overdue</span>
+          {% elif r.is_due_soon %}<span class="badge status-open">Due Soon</span>
+          {% else %}<span class="badge">Scheduled</span>{% endif %}
+        </td>
+        <td>
+          {% if not r.completed %}
+          <form method="post" action="{% url 'vehicles:reminder_mark_done' r.pk %}" style="display:inline;">
+            {% csrf_token %}
+            <button class="btn secondary" type="submit" style="padding:0.25rem 0.6rem;font-size:0.8rem;">Mark Done</button>
+          </form>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </table>
+    {% else %}
+    <p class="muted">No maintenance items tracked yet.</p>
+    {% endif %}
+
+    <form method="post" action="{% url 'vehicles:reminder_create' vehicle.pk %}" style="margin-top:1rem;display:flex;gap:0.5rem;align-items:end;flex-wrap:wrap;">
+      {% csrf_token %}
+      <div><label>Item</label><input type="text" name="description" required placeholder="e.g. Oil change"></div>
+      <div><label>Due date</label><input type="date" name="due_date"></div>
+      <div><label>Due mileage</label><input type="number" name="due_mileage"></div>
+      <div><label>Repeat every (months)</label><input type="number" name="interval_months" style="width:100px;"></div>
+      <div><label>Repeat every (miles)</label><input type="number" name="interval_miles" style="width:100px;"></div>
+      <button class="btn secondary" type="submit">Add Reminder</button>
+    </form>
+  </div>
+</div>
+
+<div class="tab-panel" id="tab-specs">
+  <div class="card">
+    <p class="muted">Live specs from the EPA's free public fueleconomy.gov API. Requires internet access from this server.</p>
+    <div id="specs-status" class="muted">Loading…</div>
+    <div id="specs-content"></div>
+  </div>
+</div>
+
+<div class="tab-panel" id="tab-photos">
+  <div class="card">
+    <p class="muted">Search Wikimedia Commons for freely-licensed reference photos/diagrams of a component (e.g. "brake caliper", "alternator"). Not vehicle-specific — general reference only.</p>
+    <div class="search-bar">
+      <input type="search" id="photos-q" placeholder="e.g. brake caliper">
+      <button class="btn secondary" type="button" id="photos-go">Search</button>
+    </div>
+    <div id="photos-content" class="grid"></div>
+  </div>
+</div>
+
+<div class="tab-panel" id="tab-recalls">
+  <div class="card">
+    <p class="muted">Live data from NHTSA's free public API (api.nhtsa.gov) for {{ vehicle.year }} {{ vehicle.make }} {{ vehicle.model }}. Requires internet access from this server.</p>
+    <div id="recalls-status" class="muted">Loading…</div>
+    <div id="recalls-content"></div>
+  </div>
+</div>
+
+<div class="tab-panel" id="tab-alldata">
+  <div class="card">
+    <p class="muted">If you have a paid ALLDATA subscription, save quick links to matching pages, or attach files you've exported from your own account. Repair-Hub never fetches ALLDATA content itself.</p>
+
+    {% if alldata_links %}
+    <table>
+      <tr><th>Label</th><th>Link</th><th>Note</th></tr>
+      {% for l in alldata_links %}
+      <tr><td>{{ l.label }}</td><td><a href="{{ l.url }}" target="_blank" rel="noopener">Open in ALLDATA</a></td><td>{{ l.note }}</td></tr>
+      {% endfor %}
+    </table>
+    {% endif %}
+    <form method="post" action="{% url 'integrations:add_link' vehicle.pk %}" style="margin-top:0.75rem;">
+      {% csrf_token %}
+      <label>Label</label>
+      <input type="text" name="label" required placeholder="e.g. Brake system diagram">
+      <label>ALLDATA URL</label>
+      <input type="url" name="url" required placeholder="https://www.alldata.com/...">
+      <label>Note</label>
+      <input type="text" name="note">
+      <button class="btn secondary" type="submit" style="margin-top:0.75rem;">Save Link</button>
+    </form>
+
+    {% if alldata_files %}
+    <table style="margin-top:1rem;">
+      <tr><th>File</th><th>Description</th></tr>
+      {% for a in alldata_files %}
+      <tr><td><a href="{{ a.file.url }}" target="_blank" rel="noopener">{{ a.file.name }}</a></td><td>{{ a.description }}</td></tr>
+      {% endfor %}
+    </table>
+    {% endif %}
+    <form method="post" action="{% url 'integrations:add_attachment' vehicle.pk %}" enctype="multipart/form-data" style="margin-top:0.75rem;">
+      {% csrf_token %}
+      <label>Attach a file you exported from your own ALLDATA account</label>
+      <input type="file" name="file" required>
+      <label>Description</label>
+      <input type="text" name="description">
+      <button class="btn secondary" type="submit" style="margin-top:0.75rem;">Upload</button>
+    </form>
+  </div>
+</div>
+
+<script>
+document.querySelectorAll('.tab-btn').forEach(function (btn) {
+  btn.addEventListener('click', function () {
+    document.querySelectorAll('.tab-btn').forEach(function (b) { b.classList.remove('active'); });
+    document.querySelectorAll('.tab-panel').forEach(function (p) { p.classList.remove('active'); });
+    btn.classList.add('active');
+    document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+    if (btn.dataset.tab === 'recalls') loadRecalls();
+    if (btn.dataset.tab === 'specs') loadSpecs();
+  });
+});
+
+let specsLoaded = false;
+async function loadSpecs() {
+  if (specsLoaded) return;
+  specsLoaded = true;
+  const statusEl = document.getElementById('specs-status');
+  const contentEl = document.getElementById('specs-content');
+  try {
+    const resp = await fetch('{% url "vehicles:specs_data" vehicle.pk %}');
+    const data = await resp.json();
+    if (!data.specs || !Object.keys(data.specs).length) {
+      statusEl.textContent = 'No matching specs found on fueleconomy.gov for this year/make/model.';
+      return;
+    }
+    const s = data.specs;
+    let html = '<table>';
+    const rows = [
+      ['Trim/Class', s.trim], ['Engine', s.engine], ['Cylinders', s.cylinders],
+      ['Transmission', s.transmission], ['Drive', s.drive], ['Fuel Type', s.fuel_type],
+      ['City MPG', s.city_mpg], ['Highway MPG', s.highway_mpg], ['Combined MPG', s.combined_mpg],
+    ];
+    rows.forEach(function (r) {
+      if (r[1]) html += '<tr><th>' + r[0] + '</th><td>' + r[1] + '</td></tr>';
+    });
+    html += '</table>';
+    if (data.options.length > 1) {
+      html += '<p class="muted" style="margin-top:0.75rem;">' + data.options.length + ' trim/engine variants exist for this year/make/model on fueleconomy.gov — showing the first match.</p>';
+    }
+    contentEl.innerHTML = html;
+    statusEl.textContent = '';
+  } catch (e) {
+    statusEl.textContent = 'Could not reach fueleconomy.gov (offline?). Specs unavailable right now.';
+  }
+}
+
+document.getElementById('photos-go').addEventListener('click', async function () {
+  const q = document.getElementById('photos-q').value.trim();
+  const contentEl = document.getElementById('photos-content');
+  if (!q) return;
+  contentEl.innerHTML = '<p class="muted">Searching…</p>';
+  try {
+    const resp = await fetch('{% url "repairguides:commons_search_json" %}?q=' + encodeURIComponent(q));
+    const data = await resp.json();
+    if (!data.images.length) {
+      contentEl.innerHTML = '<p class="muted">No results.</p>';
+      return;
+    }
+    contentEl.innerHTML = data.images.map(function (img) {
+      return '<a href="' + img.page_url + '" target="_blank" rel="noopener" style="text-decoration:none;">' +
+        '<img src="' + img.thumb_url + '" alt="" style="width:100%;border-radius:6px;">' +
+        '<p class="muted" style="font-size:0.75rem;margin:0.25rem 0 0;">' + img.title.slice(0, 40) + '</p></a>';
+    }).join('');
+  } catch (e) {
+    contentEl.innerHTML = '<p class="muted">Could not reach Wikimedia Commons (offline?).</p>';
+  }
+});
+
+let recallsLoaded = false;
+async function loadRecalls() {
+  if (recallsLoaded) return;
+  recallsLoaded = true;
+  const statusEl = document.getElementById('recalls-status');
+  const contentEl = document.getElementById('recalls-content');
+  try {
+    const resp = await fetch('{% url "vehicles:recalls_data" vehicle.pk %}');
+    const data = await resp.json();
+    let html = '';
+    html += '<div class="section-title">Recalls (' + data.recalls.length + ')</div>';
+    if (data.recalls.length) {
+      html += '<table><tr><th>Component</th><th>Summary</th><th>Report Date</th></tr>';
+      data.recalls.forEach(function (r) {
+        html += '<tr><td>' + (r.Component || '') + '</td><td>' + (r.Summary || '') + '</td><td>' + (r.ReportReceivedDate || '') + '</td></tr>';
+      });
+      html += '</table>';
+    } else {
+      html += '<p class="muted">No recalls found (or none on file with NHTSA).</p>';
+    }
+    html += '<div class="section-title">Owner Complaints (' + data.complaints.length + ')</div>';
+    if (data.complaints.length) {
+      html += '<table><tr><th>Component</th><th>Summary</th><th>Date</th></tr>';
+      data.complaints.forEach(function (c) {
+        html += '<tr><td>' + (c.components || '') + '</td><td>' + (c.summary || '').slice(0, 200) + '</td><td>' + (c.dateComplaintFiled || '') + '</td></tr>';
+      });
+      html += '</table>';
+    } else {
+      html += '<p class="muted">No owner complaints found.</p>';
+    }
+    contentEl.innerHTML = html;
+    statusEl.textContent = '';
+  } catch (e) {
+    statusEl.textContent = 'Could not reach NHTSA (offline?). Recalls/complaints unavailable right now.';
+  }
+}
+</script>
+{% endblock %}

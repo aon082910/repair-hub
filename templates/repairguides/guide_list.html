@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}Repair Guides - Repair-Hub{% endblock %}
+{% block content %}
+<div class="search-bar">
+  <form method="get" style="display:flex;gap:0.5rem;flex:1;">
+    <input type="search" name="q" value="{{ query }}" placeholder="Search guides...">
+    <select name="system">
+      <option value="">All systems</option>
+      {% for s in systems %}
+      <option value="{{ s.pk }}" {% if system_id == s.pk|stringformat:"s" %}selected{% endif %}>{{ s.name }}</option>
+      {% endfor %}
+    </select>
+    <button class="btn secondary" type="submit">Search</button>
+  </form>
+</div>
+<div class="card">
+  {% if guides %}
+  <table>
+    <tr><th>Title</th><th>System</th><th>Vehicle / Make-Model</th><th>Updated</th></tr>
+    {% for g in guides %}
+    <tr>
+      <td><a href="{{ g.get_absolute_url }}">{{ g.title }}</a></td>
+      <td>{{ g.system }}</td>
+      <td>{{ g.vehicle|default:"" }}{% if not g.vehicle %}{{ g.make|default:"" }} {{ g.model|default:"" }}{% if g.year_start %} ({{ g.year_start }}–{{ g.year_end|default:g.year_start }}){% endif %}{% endif %}</td>
+      <td>{{ g.updated_at|date:"M j, Y" }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+  {% else %}
+  <p class="muted">No repair guides yet. Add them via <a href="/admin/">Admin</a>, or bulk-import your own with <code>python manage.py import_guides yourfile.json</code>.</p>
+  {% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}Search - Repair-Hub{% endblock %}
+{% block content %}
+<div class="search-bar">
+  <form method="get" style="display:flex;gap:0.5rem;flex:1;">
+    <input type="search" name="q" value="{{ query }}" placeholder="Search vehicles, guides, DTC codes, customers, work orders...">
+    <button class="btn secondary" type="submit">Search</button>
+  </form>
+</div>
+
+{% if query %}
+{% if results.vehicles %}
+<div class="section-title">Vehicles</div>
+<div class="card">
+  {% for v in results.vehicles %}<p><a href="{{ v.get_absolute_url }}">{{ v }}</a></p>{% endfor %}
+</div>
+{% endif %}
+
+{% if results.guides %}
+<div class="section-title">Repair Guides</div>
+<div class="card">
+  {% for g in results.guides %}<p><a href="{{ g.get_absolute_url }}">{{ g.title }}</a></p>{% endfor %}
+</div>
+{% endif %}
+
+{% if results.dtc_codes %}
+<div class="section-title">DTC Codes</div>
+<div class="card">
+  {% for c in results.dtc_codes %}<p><a href="{% url 'diagnostics:detail' c.code %}">{{ c.code }} — {{ c.description }}</a></p>{% endfor %}
+</div>
+{% endif %}
+
+{% if results.customers %}
+<div class="section-title">Customers</div>
+<div class="card">
+  {% for c in results.customers %}<p><a href="{{ c.get_absolute_url }}">{{ c.name }}</a></p>{% endfor %}
+</div>
+{% endif %}
+
+{% if results.work_orders %}
+<div class="section-title">Work Orders</div>
+<div class="card">
+  {% for wo in results.work_orders %}<p><a href="{{ wo.get_absolute_url }}">WO#{{ wo.pk }} — {{ wo.vehicle }} ({{ wo.customer }})</a></p>{% endfor %}
+</div>
+{% endif %}
+
+{% if not results.vehicles and not results.guides and not results.dtc_codes and not results.customers and not results.work_orders %}
+<div class="card"><p class="muted">No results for "{{ query }}".</p></div>
+{% endif %}
+{% endif %}
+{% endblock %}

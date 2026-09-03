@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}Inspection #{{ inspection.pk }} - Repair-Hub{% endblock %}
+{% block content %}
+<h2>Inspection #{{ inspection.pk }}</h2>
+<p class="muted">
+  <a href="{{ inspection.work_order.get_absolute_url }}">{{ inspection.work_order }}</a>
+  {% if inspection.technician %} · {{ inspection.technician }}{% endif %}
+</p>
+
+<div class="card" style="display:flex;gap:1rem;flex-wrap:wrap;align-items:center;">
+  <label style="margin:0;">Customer report link</label>
+  <input type="text" readonly value="{{ request.scheme }}://{{ request.get_host }}{{ inspection.get_portal_url }}" onclick="this.select()" style="width:340px;">
+  {% if user.is_staff %}
+  <form method="post" action="{% url 'shop:inspection_create_estimate' inspection.pk %}">
+    {% csrf_token %}
+    <button class="btn secondary" type="submit">Create Estimate from Flagged Items</button>
+  </form>
+  {% endif %}
+</div>
+
+{% regroup inspection.items.all by category as item_groups %}
+{% for group in item_groups %}
+<div class="section-title">{{ group.grouper }}</div>
+<div class="card">
+  {% for item in group.list %}
+  <form method="post" action="{% url 'shop:inspection_item_update' item.pk %}" enctype="multipart/form-data"
+        style="display:flex;gap:0.75rem;align-items:end;flex-wrap:wrap;padding:0.6rem 0;border-bottom:1px solid var(--border);">
+    {% csrf_token %}
+    <div style="flex:2;min-width:180px;"><strong>{{ item.description }}</strong></div>
+    <div>
+      <label>Status</label>
+      <select name="status">
+        {% for value, label in item.STATUS_CHOICES %}
+        <option value="{{ value }}" {% if value == item.status %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div style="flex:2;min-width:180px;"><label>Notes</label><input type="text" name="notes" value="{{ item.notes }}"></div>
+    <div><label>Photo</label><input type="file" name="photo" accept="image/*"></div>
+    {% if item.photo %}<img src="{{ item.photo.url }}" alt="" style="width:48px;height:48px;object-fit:cover;border-radius:4px;">{% endif %}
+    <button class="btn secondary" type="submit" style="padding:0.4rem 0.8rem;">Save</button>
+  </form>
+  {% endfor %}
+</div>
+{% endfor %}
+{% endblock %}

@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}Appointments - Repair-Hub{% endblock %}
+{% block content %}
+<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:0.75rem;">
+  <h2 style="margin:0;">Appointments — {{ week_start|date:"M j" }} to {{ week_end|date:"M j, Y" }}</h2>
+  <div style="display:flex;gap:0.5rem;">
+    <a class="btn secondary" href="?week={{ week_offset|add:"-1" }}">← Prev week</a>
+    <a class="btn secondary" href="?week=0">Today</a>
+    <a class="btn secondary" href="?week={{ week_offset|add:"1" }}">Next week →</a>
+    <a class="btn" href="{% url 'shop:appointment_create' %}">+ New Appointment</a>
+  </div>
+</div>
+
+<div class="board" style="margin-top:1.25rem;">
+  {% for bucket in day_buckets %}
+  <div class="board-col">
+    <h4>{{ bucket.date|date:"D, M j" }}</h4>
+    {% for a in bucket.appointments %}
+    <a class="board-card" href="{{ a.get_absolute_url }}">
+      <div class="wo-num">{{ a.scheduled_at|date:"g:i A" }}</div>
+      <div class="wo-veh">{{ a.reason }}</div>
+      <div class="wo-cust">{{ a.customer }}{% if a.vehicle %} · {{ a.vehicle }}{% endif %}</div>
+      <span class="badge">{{ a.get_status_display }}</span>
+    </a>
+    {% empty %}
+    <p class="muted" style="font-size:0.85rem;">No appointments</p>
+    {% endfor %}
+  </div>
+  {% endfor %}
+</div>
+{% endblock %}

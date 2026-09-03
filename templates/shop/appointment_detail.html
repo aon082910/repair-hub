@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}Appointment - Repair-Hub{% endblock %}
+{% block content %}
+<h2>{{ appointment.scheduled_at|date:"l, M j, Y g:i A" }} <span class="badge">{{ appointment.get_status_display }}</span></h2>
+<p class="muted">
+  <a href="{{ appointment.customer.get_absolute_url }}">{{ appointment.customer }}</a>
+  {% if appointment.vehicle %} · <a href="{{ appointment.vehicle.get_absolute_url }}">{{ appointment.vehicle }}</a>{% endif %}
+  · {{ appointment.duration_minutes }} min
+</p>
+
+<div class="section-title">Reason</div>
+<div class="card">{{ appointment.reason }}</div>
+
+<div class="card" style="display:flex;gap:1rem;flex-wrap:wrap;align-items:center;">
+  <form method="post" action="{% url 'shop:appointment_update_status' appointment.pk %}" style="display:flex;gap:0.5rem;align-items:center;">
+    {% csrf_token %}
+    <label style="margin:0;">Status</label>
+    <select name="status" onchange="this.form.submit()">
+      {% for value, label in appointment.STATUS_CHOICES %}
+      <option value="{{ value }}" {% if value == appointment.status %}selected{% endif %}>{{ label }}</option>
+      {% endfor %}
+    </select>
+  </form>
+
+  {% if appointment.work_order %}
+  <a class="badge" href="{{ appointment.work_order.get_absolute_url }}">→ WO#{{ appointment.work_order.pk }}</a>
+  {% elif appointment.vehicle %}
+  <form method="post" action="{% url 'shop:appointment_start_work_order' appointment.pk %}">
+    {% csrf_token %}
+    <button class="btn secondary" type="submit">Start Work Order</button>
+  </form>
+  {% else %}
+  <p class="muted">Add a vehicle to this appointment to start a work order from it.</p>
+  {% endif %}
+</div>
+{% endblock %}

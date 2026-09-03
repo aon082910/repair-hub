@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% load favorite_tags %}
+{% block title %}{{ dtc.code }} - Repair-Hub{% endblock %}
+{% block content %}
+<h2>{{ dtc.code }} <span class="badge">{{ dtc.get_system_display }}</span> {% favorite_button dtc %}</h2>
+<p>{{ dtc.description }}</p>
+<p class="muted">{{ dtc.get_origin_display }}{% if dtc.make %} — {{ dtc.make }}{% endif %}</p>
+<p><a href="https://www.youtube.com/results?search_query={{ dtc.code|urlencode }}+{{ dtc.description|urlencode }}" target="_blank" rel="noopener" class="badge">▶ Search YouTube walkthroughs</a></p>
+
+{% if dtc.likely_causes %}
+<div class="section-title">Likely Causes</div>
+<div class="card">{{ dtc.likely_causes|linebreaks }}</div>
+{% endif %}
+
+{% if dtc.diagnostic_steps %}
+<div class="section-title">Diagnostic Steps</div>
+<div class="card">{{ dtc.diagnostic_steps|linebreaks }}</div>
+{% endif %}
+
+<div class="section-title">Related Repair Guides</div>
+<div class="card">
+  {% if related_guides %}
+  <table>
+    <tr><th>Title</th><th>Vehicle</th></tr>
+    {% for g in related_guides %}
+    <tr><td><a href="{{ g.get_absolute_url }}">{{ g.title }}</a></td><td>{{ g.vehicle|default:g.make|default:"—" }}</td></tr>
+    {% endfor %}
+  </table>
+  {% else %}
+  <p class="muted">No repair guides linked to this code yet.</p>
+  {% endif %}
+</div>
+{% endblock %}

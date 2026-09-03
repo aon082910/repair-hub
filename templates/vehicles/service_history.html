@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}Service History - Repair-Hub{% endblock %}
+{% block content %}
+<div class="card" style="max-width:640px;margin:2rem auto;">
+  <h2 style="margin-top:0;">Repair<span style="color:var(--accent)">-Hub</span> Service History</h2>
+  <p class="muted">{{ vehicle }}</p>
+
+  {% if work_orders %}
+  <table>
+    <tr><th>Date</th><th>Work Performed</th></tr>
+    {% for wo in work_orders %}
+    <tr>
+      <td>{{ wo.updated_at|date:"M j, Y" }}</td>
+      <td>
+        {% for l in wo.labor_lines.all %}{{ l.description }}{% if not forloop.last %}, {% endif %}{% endfor %}
+        {% if not wo.labor_lines.all %}{{ wo.complaint|truncatechars:80 }}{% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+  </table>
+  {% else %}
+  <p class="muted">No completed service on file yet.</p>
+  {% endif %}
+</div>
+{% endblock %}

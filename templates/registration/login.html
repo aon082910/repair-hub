@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}Login - Repair-Hub{% endblock %}
+{% block content %}
+<div class="card" style="max-width:380px;margin:4rem auto;">
+  <h2 style="margin-top:0;">Repair<span style="color:var(--accent)">-Hub</span></h2>
+  <form method="post">
+    {% csrf_token %}
+    <label for="id_username">Username</label>
+    <input type="text" name="username" id="id_username" required autofocus>
+    <label for="id_password">Password</label>
+    <input type="password" name="password" id="id_password" required>
+    {% if form.errors %}<p style="color:var(--danger);">Invalid username or password.</p>{% endif %}
+    <button class="btn" type="submit" style="margin-top:1.25rem;width:100%;">Sign in</button>
+  </form>
+</div>
+{% endblock %}

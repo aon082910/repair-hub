@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}Service Status - Repair-Hub{% endblock %}
+{% block content %}
+<div class="card" style="max-width:640px;margin:2rem auto;">
+  <h2 style="margin-top:0;">Repair<span style="color:var(--accent)">-Hub</span> Service Status</h2>
+  <p class="muted">{{ work_order.vehicle }} · Work Order #{{ work_order.pk }}</p>
+  <p><span class="badge status-{{ work_order.status }}" style="font-size:0.95rem;">{{ work_order.get_status_display }}</span></p>
+
+  <div class="section-title">What you told us</div>
+  {{ work_order.complaint|linebreaks }}
+
+  {% if work_order.labor_lines.all or work_order.part_lines.all %}
+  <div class="section-title">Work performed</div>
+  <table>
+    <tr><th>Description</th><th>Amount</th></tr>
+    {% for l in work_order.labor_lines.all %}
+    <tr><td>{{ l.description }} ({{ l.hours }} hrs)</td><td>${{ l.line_total|floatformat:2 }}</td></tr>
+    {% endfor %}
+    {% for p in work_order.part_lines.all %}
+    <tr><td>{{ p.description }}{% if p.part_number %} ({{ p.part_number }}){% endif %} × {{ p.quantity }}</td><td>${{ p.line_total|floatformat:2 }}</td></tr>
+    {% endfor %}
+  </table>
+  <p style="text-align:right;font-weight:700;">Total: ${{ work_order.grand_total|floatformat:2 }}</p>
+  {% endif %}
+
+  <p class="muted" style="margin-top:1.5rem;">Questions about this repair? Contact the shop directly and reference WO#{{ work_order.pk }}.</p>
+</div>
+{% endblock %}

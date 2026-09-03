@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}New Appointment - Repair-Hub{% endblock %}
+{% block content %}
+<div class="card" style="max-width:520px;">
+  <h2 style="margin-top:0;">New Appointment</h2>
+
+  <form method="get" style="margin-bottom:1rem;">
+    <label>Customer</label>
+    <select name="customer" onchange="this.form.submit()">
+      <option value="">Choose a customer…</option>
+      {% for c in customers %}
+      <option value="{{ c.pk }}" {% if selected_customer.pk == c.pk %}selected{% endif %}>{{ c.name }}</option>
+      {% endfor %}
+    </select>
+  </form>
+
+  {% if selected_customer %}
+  <form method="post">
+    {% csrf_token %}
+    <input type="hidden" name="customer" value="{{ selected_customer.pk }}">
+    <label>Vehicle (optional)</label>
+    <select name="vehicle">
+      <option value="">Not sure yet</option>
+      {% for v in selected_customer.vehicles.all %}
+      <option value="{{ v.pk }}">{{ v }}</option>
+      {% endfor %}
+    </select>
+    <label>Date</label>
+    <input type="date" name="date" required>
+    <label>Time</label>
+    <input type="time" name="time" required>
+    <label>Duration (minutes)</label>
+    <input type="number" name="duration_minutes" value="60" step="15" min="15">
+    <label>Reason</label>
+    <input type="text" name="reason" required placeholder="e.g. Brake inspection">
+    <button class="btn" type="submit" style="margin-top:1.25rem;">Schedule Appointment</button>
+  </form>
+  {% else %}
+  <p class="muted">Pick a customer above to continue.</p>
+  {% endif %}
+</div>
+{% endblock %}

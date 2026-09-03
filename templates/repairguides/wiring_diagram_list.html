@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}Wiring Diagrams - Repair-Hub{% endblock %}
+{% block content %}
+<div class="search-bar">
+  <form method="get" style="display:flex;gap:0.5rem;flex:1;">
+    <input type="search" name="q" value="{{ query }}" placeholder="Search wiring diagrams...">
+    <button class="btn secondary" type="submit">Search</button>
+  </form>
+</div>
+<div class="card">
+  {% if diagrams %}
+  <table>
+    <tr><th>Title</th><th>System</th><th>Vehicle / Make-Model</th><th>File</th></tr>
+    {% for d in diagrams %}
+    <tr>
+      <td>{{ d.title }}</td>
+      <td>{{ d.system }}</td>
+      <td>{{ d.vehicle|default:"" }}{% if not d.vehicle %}{{ d.make|default:"" }} {{ d.model|default:"" }}{% endif %}</td>
+      <td><a href="{{ d.file.url }}" target="_blank" rel="noopener">Open</a></td>
+    </tr>
+    {% endfor %}
+  </table>
+  {% else %}
+  <p class="muted">No wiring diagrams uploaded yet. Add them via <a href="/admin/">Admin</a>.</p>
+  {% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}Activity Log - Repair-Hub{% endblock %}
+{% block content %}
+<h2 style="margin-top:0;">Activity Log</h2>
+<div class="card">
+  {% if entries %}
+  <table>
+    <tr><th>When</th><th>Who</th><th>Action</th><th>Item</th></tr>
+    {% for e in entries %}
+    <tr>
+      <td>{{ e.timestamp|date:"M j, Y g:i A" }}</td>
+      <td>{{ e.user|default:"—" }}</td>
+      <td>{{ e.action }}</td>
+      <td>{{ e.object_repr }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+  {% else %}
+  <p class="muted">No activity recorded yet.</p>
+  {% endif %}
+</div>
+{% endblock %}

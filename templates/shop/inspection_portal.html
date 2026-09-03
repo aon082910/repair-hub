@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}Inspection Report - Repair-Hub{% endblock %}
+{% block content %}
+<div class="card" style="max-width:640px;margin:2rem auto;">
+  <h2 style="margin-top:0;">Repair<span style="color:var(--accent)">-Hub</span> Inspection Report</h2>
+  <p class="muted">{{ inspection.work_order.vehicle }} · {{ inspection.created_at|date:"M j, Y" }}</p>
+
+  {% regroup inspection.items.all by category as item_groups %}
+  {% for group in item_groups %}
+  <div class="section-title">{{ group.grouper }}</div>
+  <table>
+    {% for item in group.list %}
+    <tr>
+      <td style="width:60%;">{{ item.description }}{% if item.notes %}<br><span class="muted" style="font-size:0.85rem;">{{ item.notes }}</span>{% endif %}</td>
+      <td>
+        {% if item.status == "green" %}<span class="badge" style="color:var(--success);border-color:var(--success);">Good</span>
+        {% elif item.status == "yellow" %}<span class="badge" style="color:var(--warning);border-color:var(--warning);">Monitor</span>
+        {% else %}<span class="badge" style="color:var(--danger);border-color:var(--danger);">Needs Attention</span>{% endif %}
+      </td>
+    </tr>
+    {% if item.photo %}
+    <tr><td colspan="2"><img src="{{ item.photo.url }}" alt="" style="max-width:200px;border-radius:6px;"></td></tr>
+    {% endif %}
+    {% endfor %}
+  </table>
+  {% endfor %}
+
+  <p class="muted" style="margin-top:1.5rem;">Questions about this inspection? Contact the shop and reference Inspection #{{ inspection.pk }}.</p>
+</div>
+{% endblock %}

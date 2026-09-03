@@ -1,0 +1,57 @@
+from django.urls import path
+
+from . import views
+
+app_name = "shop"
+
+urlpatterns = [
+    path("customers/", views.customer_list, name="customer_list"),
+    path("customers/new/", views.customer_create, name="customer_create"),
+    path("customers/<int:pk>/", views.customer_detail, name="customer_detail"),
+    path("customers/<int:pk>/create-login/", views.customer_create_login, name="customer_create_login"),
+    path("customers/<int:customer_pk>/work-orders/new/", views.workorder_create, name="workorder_create"),
+    path("customers/<int:customer_pk>/estimates/new/", views.estimate_create, name="estimate_create"),
+    path("dashboard/", views.customer_dashboard, name="customer_dashboard"),
+    path("work-orders/", views.workorder_list, name="workorder_list"),
+    path("work-orders/<int:pk>/", views.workorder_detail, name="workorder_detail"),
+    path("work-orders/<int:pk>/add-labor/", views.workorder_add_labor, name="workorder_add_labor"),
+    path("work-orders/<int:pk>/add-part/", views.workorder_add_part, name="workorder_add_part"),
+    path("work-orders/<int:pk>/update-status/", views.workorder_update_status, name="workorder_update_status"),
+    path(
+        "work-orders/<int:pk>/assign-technician/",
+        views.workorder_assign_technician,
+        name="workorder_assign_technician",
+    ),
+    path("work-orders/<int:pk>/pdf/", views.workorder_pdf, name="workorder_pdf"),
+    path("portal/<uuid:token>/", views.customer_portal, name="customer_portal"),
+    path("technicians/", views.technician_list, name="technician_list"),
+    path("technicians/new/", views.technician_create, name="technician_create"),
+    path("technician-dashboard/", views.technician_dashboard, name="technician_dashboard"),
+    path("estimates/", views.estimate_list, name="estimate_list"),
+    path("estimates/<int:pk>/", views.estimate_detail, name="estimate_detail"),
+    path("estimates/<int:pk>/add-labor/", views.estimate_add_labor, name="estimate_add_labor"),
+    path("estimates/<int:pk>/add-part/", views.estimate_add_part, name="estimate_add_part"),
+    path("estimates/<int:pk>/send/", views.estimate_send, name="estimate_send"),
+    path("estimates/<int:pk>/convert/", views.estimate_convert, name="estimate_convert"),
+    path("estimates/portal/<uuid:token>/", views.estimate_portal, name="estimate_portal"),
+    path("estimates/<int:pk>/pdf/", views.estimate_pdf, name="estimate_pdf"),
+    path("appointments/", views.appointment_calendar, name="appointment_calendar"),
+    path("appointments/new/", views.appointment_create, name="appointment_create"),
+    path("appointments/<int:pk>/", views.appointment_detail, name="appointment_detail"),
+    path("appointments/<int:pk>/update-status/", views.appointment_update_status, name="appointment_update_status"),
+    path(
+        "appointments/<int:pk>/start-work-order/",
+        views.appointment_start_work_order,
+        name="appointment_start_work_order",
+    ),
+    path("inventory/", views.inventory_list, name="inventory_list"),
+    path("inventory/new/", views.inventory_create, name="inventory_create"),
+    path("inventory/parts.json", views.inventory_parts_json, name="inventory_parts_json"),
+    path("work-orders/<int:work_order_pk>/inspections/new/", views.inspection_create, name="inspection_create"),
+    path("inspections/<int:pk>/", views.inspection_detail, name="inspection_detail"),
+    path("inspections/<int:pk>/create-estimate/", views.inspection_create_estimate, name="inspection_create_estimate"),
+    path("inspections/portal/<uuid:token>/", views.inspection_portal, name="inspection_portal"),
+    path("inspection-items/<int:pk>/update/", views.inspection_item_update, name="inspection_item_update"),
+    path("reports/", views.reports_dashboard, name="reports"),
+    path("activity-log/", views.activity_log, name="activity_log"),
+]
