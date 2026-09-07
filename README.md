@@ -201,6 +201,13 @@ seeds the generic DTC codes on every startup — safe to restart/update
 anytime. `PUID`/`PGID` control who owns `/config` on the host (99/100 is
 Unraid's built-in nobody/users).
 
+**Getting a `Bad Request (400)` page instead of the login screen?** That's
+Django rejecting the `Host` header. `DJANGO_ALLOWED_HOSTS` defaults to `*`
+(any host), which is fine for a LAN-only appliance reached by IP — so this
+should only come up if you explicitly locked it down. If you did set it,
+make sure it includes whatever hostname/IP is in your browser's address
+bar, comma-separated (e.g. `192.168.1.50,repairhub.local`).
+
 ### Data persistence
 
 Everything lives under the one `/config` volume: `db.sqlite3` and

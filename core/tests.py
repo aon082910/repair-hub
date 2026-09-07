@@ -1,4 +1,7 @@
+import importlib
 import json
+import os
+from unittest import mock
 
 from django.contrib.auth import get_user_model
 from django.contrib.contenttypes.models import ContentType
@@ -121,3 +124,40 @@ class BackupDownloadTests(TestCase):
         self.assertIsInstance(data, list)
         models_present = {row["model"] for row in data}
         self.assertIn("vehicles.vehicle", models_present)
+
+
+class AllowedHostsDefaultTests(TestCase):
+    """Regression test for GitHub issue #1: fresh Unraid installs got a
+    400 Bad Request because ALLOWED_HOSTS defaulted to localhost/127.0.0.1
+    only, which rejects the LAN-IP host header Unraid users actually hit.
+    """
+
+    def test_defaults_to_wildcard_when_unset(self):
+        from repairhub import settings as settings_module
+
+        env = dict(os.environ)
+        env.pop("DJANGO_ALLOWED_HOSTS", None)
+        with mock.patch.dict(os.environ, env, clear=True):
+            importlib.reload(settings_module)
+            try:
+                self.assertEqual(settings_module.ALLOWED_HOSTS, ["*"])
+            finally:
+                importlib.reload(settings_module)
+
+    def test_explicit_hosts_still_respected(self):
+        from repairhub import settings as settings_module
+
+        env = dict(os.environ)
+        env["DJANGO_ALLOWED_HOSTS"] = "192.168.1.50,repairhub.local"
+        with mock.patch.dict(os.environ, env, clear=True):
+            importlib.reload(settings_module)
+            try:
+                self.assertEqual(
+                    settings_module.ALLOWED_HOSTS,
+                    ["192.168.1.50", "repairhub.local"],
+                )
+                self.assertIn(
+                    "http://192.168.1.50", settings_module.CSRF_TRUSTED_ORIGINS
+                )
+            finally:
+                importlib.reload(settings_module)
