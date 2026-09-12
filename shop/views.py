@@ -1,14 +1,16 @@
 import csv
 import datetime
 import io
+from decimal import Decimal
 
 from django.contrib import messages
 from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
 from django.db.models import F
-from django.http import HttpResponse, JsonResponse
+from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.utils import timezone
 from django.utils.crypto import get_random_string
 from django.utils.text import slugify
@@ -35,6 +37,8 @@ from .models import (
     TimeEntry,
     WorkOrder,
 )
+from .ics import build_appointments_ics
+from .notifications import notify_appointment_created, notify_estimate_sent, notify_invoice_created
 from .utils import log_activity
 
 
@@ -396,6 +400,7 @@ def estimate_send(request, pk):
     if request.method == "POST" and estimate.status == "draft":
         estimate.status = "sent"
         estimate.save(update_fields=["status", "updated_at"])
+        notify_estimate_sent(estimate)
         messages.success(request, "Marked as sent. Share the customer approval link with them.")
     return redirect(estimate.get_absolute_url())
 
@@ -509,12 +514,29 @@ def appointment_create(request):
             duration_minutes=request.POST.get("duration_minutes") or 60,
             reason=request.POST.get("reason", "").strip(),
         )
+        notify_appointment_created(appointment)
         return redirect("shop:appointment_calendar")
     return render(
         request,
         "shop/appointment_form.html",
         {"customers": customers, "customer_id": customer_id, "selected_customer": selected_customer},
     )
+
+
+def appointments_ics_feed(request, token):
+    """Subscribe URL (webcal/https) for the appointment calendar, gated by
+    an unguessable token from ShopSettings rather than a login -- calendar
+    apps can't do a Django login flow when polling a feed."""
+    settings_obj = ShopSettings.get_solo()
+    if str(settings_obj.calendar_feed_token) != str(token):
+        raise Http404
+    appointments = Appointment.objects.filter(
+        scheduled_at__gte=timezone.now() - datetime.timedelta(days=7),
+        scheduled_at__lte=timezone.now() + datetime.timedelta(days=180),
+    ).exclude(status="cancelled").select_related("customer", "vehicle")
+    response = HttpResponse(build_appointments_ics(appointments), content_type="text/calendar; charset=utf-8")
+    response["Content-Disposition"] = 'inline; filename="repairhub-appointments.ics"'
+    return response
 
 
 @staff_required
@@ -702,13 +724,48 @@ def reports_dashboard(request):
         status_counts.append({"label": label, "count": WorkOrder.objects.filter(status=value).count()})
 
     guide_counts = {}
+    part_counts = {}
+    timed_orders = []
     for wo in completed_orders:
         for guide in wo.repair_guides.all():
             guide_counts[guide] = guide_counts.get(guide, 0) + 1
+        for line in wo.part_lines.all():
+            key = line.description
+            part_counts[key] = part_counts.get(key, 0) + line.quantity
+        if wo.completed_at:
+            timed_orders.append((wo.completed_at - wo.created_at).total_seconds())
     top_guides = sorted(guide_counts.items(), key=lambda x: -x[1])[:10]
+    top_parts = sorted(part_counts.items(), key=lambda x: -x[1])[:10]
+    avg_repair_hours = (sum(timed_orders) / len(timed_orders) / 3600) if timed_orders else None
 
     low_stock = InventoryPart.objects.all()
     low_stock = [p for p in low_stock if p.is_low_stock]
+
+    outstanding_balance = sum(
+        (inv.balance_due for inv in Invoice.objects.filter(paid=False).select_related("work_order")),
+        start=Decimal("0.00"),
+    )
+
+    revenue_by_month = []
+    month_start = timezone.localdate().replace(day=1)
+    for i in range(5, -1, -1):
+        year = month_start.year
+        month = month_start.month - i
+        while month <= 0:
+            month += 12
+            year -= 1
+        month_orders = WorkOrder.objects.filter(
+            status__in=["completed", "invoiced", "closed"], completed_at__year=year, completed_at__month=month
+        ).prefetch_related("labor_lines", "part_lines")
+        revenue_by_month.append(
+            {
+                "label": datetime.date(year, month, 1).strftime("%b %Y"),
+                "total": sum((wo.grand_total for wo in month_orders), start=Decimal("0.00")),
+            }
+        )
+    max_month_revenue = max((m["total"] for m in revenue_by_month), default=Decimal("0.00")) or Decimal("1.00")
+    for m in revenue_by_month:
+        m["bar_percent"] = int((m["total"] / max_month_revenue) * 100)
 
     return render(
         request,
@@ -720,7 +777,11 @@ def reports_dashboard(request):
             "avg_ticket": avg_ticket,
             "status_counts": status_counts,
             "top_guides": top_guides,
+            "top_parts": top_parts,
+            "avg_repair_hours": avg_repair_hours,
             "low_stock": low_stock,
+            "outstanding_balance": outstanding_balance,
+            "revenue_by_month": revenue_by_month,
         },
     )
 
@@ -740,7 +801,20 @@ def shop_settings_view(request):
         settings_obj.save()
         messages.success(request, "Settings saved.")
         return redirect("shop:settings")
-    return render(request, "shop/settings.html", {"settings": settings_obj})
+    feed_path = reverse("shop:appointments_ics_feed", args=[settings_obj.calendar_feed_token])
+    calendar_feed_url = request.build_absolute_uri(feed_path)
+    return render(
+        request, "shop/settings.html", {"settings": settings_obj, "calendar_feed_url": calendar_feed_url}
+    )
+
+
+@staff_required
+def regenerate_calendar_feed_token(request):
+    settings_obj = ShopSettings.get_solo()
+    if request.method == "POST":
+        settings_obj.regenerate_calendar_feed_token()
+        messages.success(request, "Calendar feed link regenerated -- update it in any calendar app that had the old one.")
+    return redirect("shop:settings")
 
 
 @staff_required
@@ -762,6 +836,7 @@ def workorder_create_invoice(request, pk):
         work_order.status = "invoiced"
         work_order.save(update_fields=["status", "updated_at"])
         log_activity(request.user, f"Created {invoice_number} for WO#{work_order.pk}", invoice)
+        notify_invoice_created(invoice)
         return redirect("shop:invoice_detail", pk=invoice.pk)
     if hasattr(work_order, "invoice"):
         return redirect("shop:invoice_detail", pk=work_order.invoice.pk)

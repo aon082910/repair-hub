@@ -66,6 +66,17 @@ def recalls_data(request, pk):
 
 
 @staff_or_technician_required
+def vehicle_refresh_recalls(request, pk):
+    """Staff action: re-check and cache this vehicle's open-recall count so
+    it shows up (or clears) on the dashboard flag without waiting for the
+    next scheduled check_recalls run."""
+    vehicle = get_object_or_404(Vehicle, pk=pk)
+    if request.method == "POST":
+        vehicle.refresh_recalls()
+    return redirect(vehicle.get_absolute_url())
+
+
+@staff_or_technician_required
 def makes_json(request):
     return JsonResponse({"makes": list(Make.objects.order_by("name").values_list("name", flat=True))})
 

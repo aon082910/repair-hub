@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}Two-Factor Authentication - Repair-Hub{% endblock %}
+{% block content %}
+<h2 style="margin-top:0;">Two-Factor Authentication</h2>
+
+{% if credential.enabled %}
+<div class="card" style="max-width:420px;">
+  <p>Two-factor authentication is <strong>enabled</strong> on your account
+  {% if credential.confirmed_at %}since {{ credential.confirmed_at|date:"M j, Y" }}{% endif %}.</p>
+  <form method="post" action="{% url 'two_factor_disable' %}" onsubmit="return confirm('Disable two-factor authentication?');">
+    {% csrf_token %}
+    <button class="btn secondary" type="submit">Disable</button>
+  </form>
+</div>
+{% else %}
+<div class="card" style="max-width:420px;">
+  <p class="muted">Scan this code with an authenticator app (Google Authenticator, Authy, 1Password, etc.), then enter the 6-digit code it shows to finish enabling 2FA.</p>
+  <img src="{% url 'two_factor_qr_code' %}" alt="2FA QR code" style="display:block;margin:0 auto;max-width:220px;">
+  <p class="muted" style="font-size:0.8rem;word-break:break-all;text-align:center;">Manual entry key: {{ credential.secret }}</p>
+  <form method="post">
+    {% csrf_token %}
+    <label for="id_code">Code</label>
+    <input type="text" name="code" id="id_code" inputmode="numeric" pattern="[0-9]*" required autofocus>
+    <button class="btn" type="submit" style="margin-top:1rem;width:100%;">Enable</button>
+  </form>
+</div>
+{% endif %}
+{% endblock %}

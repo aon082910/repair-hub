@@ -83,4 +83,42 @@
   <p class="muted">Nothing due in the next 30 days / 1,000 miles.</p>
   {% endif %}
 </div>
+
+<div class="section-title">Open Recalls</div>
+<div class="card">
+  {% if vehicles_with_recalls %}
+  <table>
+    <tr><th>Vehicle</th><th>Owner</th><th>Open Recalls</th><th>Last Checked</th></tr>
+    {% for v in vehicles_with_recalls %}
+    <tr>
+      <td><a href="{{ v.get_absolute_url }}">{{ v }}</a></td>
+      <td>{{ v.owner|default:"—" }}</td>
+      <td><span class="badge status-open">{{ v.open_recall_count }}</span></td>
+      <td>{{ v.recalls_checked_at|date:"M j, Y"|default:"—" }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+  {% else %}
+  <p class="muted">No cached open recalls. Run <code>python manage.py check_recalls</code> to refresh (see README).</p>
+  {% endif %}
+</div>
+
+<div class="section-title">Low Stock Parts</div>
+<div class="card">
+  {% if low_stock_parts %}
+  <table>
+    <tr><th>Part #</th><th>Description</th><th>On Hand</th><th>Reorder Point</th></tr>
+    {% for p in low_stock_parts %}
+    <tr>
+      <td>{{ p.part_number }}</td>
+      <td>{{ p.description }}</td>
+      <td>{{ p.quantity_on_hand }}</td>
+      <td>{{ p.reorder_point }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+  {% else %}
+  <p class="muted">Nothing below its reorder point.</p>
+  {% endif %}
+</div>
 {% endblock %}

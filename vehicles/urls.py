@@ -12,6 +12,7 @@ urlpatterns = [
     path("models.json", views.models_json, name="models_json"),
     path("<int:pk>/", views.vehicle_detail, name="detail"),
     path("<int:pk>/recalls.json", views.recalls_data, name="recalls_data"),
+    path("<int:pk>/refresh-recalls/", views.vehicle_refresh_recalls, name="refresh_recalls"),
     path("<int:pk>/specs.json", views.specs_data, name="specs_data"),
     path("<int:pk>/safety.json", views.safety_data, name="safety_data"),
     path("<int:pk>/model-summary.json", views.model_summary_data, name="model_summary_data"),

@@ -300,3 +300,96 @@ class ModelSummaryTests(TestCase):
     def test_404_returns_empty(self, mock_get):
         mock_get.return_value = Mock(status_code=404)
         self.assertEqual(get_model_summary("Honda", "NonexistentModelXYZ"), {})
+
+
+class RecallCacheTests(TestCase):
+    @patch("vehicles.recalls.requests.get")
+    def test_refresh_recalls_caches_count(self, mock_get):
+        mock_get.return_value = Mock(
+            status_code=200, json=lambda: {"results": [{"Component": "BRAKES"}, {"Component": "AIRBAGS"}]}
+        )
+        mock_get.return_value.raise_for_status = lambda: None
+        vehicle = make_vehicle()
+        self.assertEqual(vehicle.open_recall_count, 0)
+        self.assertIsNone(vehicle.recalls_checked_at)
+
+        vehicle.refresh_recalls()
+
+        vehicle.refresh_from_db()
+        self.assertEqual(vehicle.open_recall_count, 2)
+        self.assertIsNotNone(vehicle.recalls_checked_at)
+
+    @patch("vehicles.recalls.requests.get", side_effect=requests.RequestException("timeout"))
+    def test_refresh_recalls_zero_on_failure(self, mock_get):
+        vehicle = make_vehicle()
+        vehicle.refresh_recalls()
+        vehicle.refresh_from_db()
+        self.assertEqual(vehicle.open_recall_count, 0)
+
+
+class CheckRecallsCommandTests(TestCase):
+    @patch("vehicles.recalls.requests.get")
+    def test_only_checks_customer_owned_vehicles(self, mock_get):
+        from io import StringIO
+
+        from django.core.management import call_command
+
+        mock_get.return_value = Mock(status_code=200, json=lambda: {"results": [{"Component": "BRAKES"}]})
+        mock_get.return_value.raise_for_status = lambda: None
+
+        customer = Customer.objects.create(name="Jane")
+        owned = make_vehicle()
+        owned.owner = customer
+        owned.save(update_fields=["owner"])
+        reference_only = make_vehicle(model_name="Accord")
+
+        call_command("check_recalls", stdout=StringIO())
+
+        owned.refresh_from_db()
+        reference_only.refresh_from_db()
+        self.assertEqual(owned.open_recall_count, 1)
+        self.assertEqual(reference_only.open_recall_count, 0)
+        self.assertIsNotNone(owned.recalls_checked_at)
+        self.assertIsNone(reference_only.recalls_checked_at)
+
+    @patch("vehicles.recalls.requests.get")
+    def test_skips_recently_checked_unless_forced(self, mock_get):
+        from io import StringIO
+
+        from django.core.management import call_command
+
+        mock_get.return_value = Mock(status_code=200, json=lambda: {"results": []})
+        mock_get.return_value.raise_for_status = lambda: None
+
+        customer = Customer.objects.create(name="Jane")
+        vehicle = make_vehicle()
+        vehicle.owner = customer
+        vehicle.save(update_fields=["owner"])
+        vehicle.recalls_checked_at = timezone.now()
+        vehicle.save(update_fields=["recalls_checked_at"])
+
+        call_command("check_recalls", stdout=StringIO())
+        self.assertEqual(mock_get.call_count, 0)
+
+        call_command("check_recalls", "--force", stdout=StringIO())
+        self.assertEqual(mock_get.call_count, 1)
+
+
+class VehicleRefreshRecallsViewTests(TestCase):
+    def setUp(self):
+        self.staff = User.objects.create_user(username="staff", password="pw", is_staff=True)
+        self.vehicle = make_vehicle()
+
+    @patch("vehicles.recalls.requests.get")
+    def test_staff_can_refresh(self, mock_get):
+        mock_get.return_value = Mock(status_code=200, json=lambda: {"results": [{"Component": "BRAKES"}]})
+        mock_get.return_value.raise_for_status = lambda: None
+        self.client.login(username="staff", password="pw")
+        resp = self.client.post(reverse("vehicles:refresh_recalls", args=[self.vehicle.pk]))
+        self.assertEqual(resp.status_code, 302)
+        self.vehicle.refresh_from_db()
+        self.assertEqual(self.vehicle.open_recall_count, 1)
+
+    def test_requires_login(self):
+        resp = self.client.post(reverse("vehicles:refresh_recalls", args=[self.vehicle.pk]))
+        self.assertEqual(resp.status_code, 302)

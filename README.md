@@ -143,6 +143,31 @@ control, never automated fetching.
   side, rollover) alongside recalls/complaints on the vehicle page.
 - **Model background info** — a short Wikipedia summary (with photo and
   link) for the vehicle's make/model, shown at the top of its page.
+- **Open recall dashboard flag** — `python manage.py check_recalls` caches
+  each customer vehicle's open-recall count from NHTSA so the staff
+  dashboard can flag them without a live API call on every page load
+  (see [Scheduled tasks](#scheduled-tasks)); "Refresh now" on a vehicle's
+  page updates it immediately.
+- **Email notifications** — appointment confirmations, "estimate ready for
+  review" (with the approval link), and "invoice ready" go to the
+  customer's email if one is on file. Works out of the box by logging to
+  the container console; point it at real SMTP with the `EMAIL_*` env vars
+  (see `.env.example`) to actually send.
+- **Appointment calendar feed** — an `.ics` subscribe link (Shop Settings,
+  staff-only) for Google Calendar / Apple Calendar / Outlook, gated by an
+  unguessable token you can regenerate if it leaks.
+- **Expanded reports** — revenue by month, average repair time, top parts
+  used, and total outstanding invoice balance, alongside the existing
+  revenue/ticket/status/low-stock numbers.
+- **Scheduled backups** — a background process inside the container writes
+  a timestamped JSON snapshot to `/config/backups` on an interval (default
+  daily, keeping the last 14), on top of the on-demand "Download Backup"
+  link and the `scripts/backup.sh` hot-backup. See
+  [Scheduled tasks](#scheduled-tasks).
+- **Optional 2FA for staff accounts** — "Two-Factor Auth" in the sidebar
+  sets up TOTP (any authenticator app — Google Authenticator, Authy,
+  1Password, etc.) with a QR code; once enabled, login requires the current
+  6-digit code.
 
 ### Access model
 
@@ -251,6 +276,30 @@ it):
 ./scripts/restore.sh backups/repairhub-20260101-030000.tar.gz repair-hub
 ```
 
+**Automatic JSON snapshots.** On top of that, the container itself writes a
+timestamped JSON snapshot (the same data as "Download Backup") to
+`/config/backups` on a schedule -- daily by default, keeping the 14 most
+recent. This is a lightweight extra safety net, not a replacement for the
+`scripts/backup.sh` tarball above (it doesn't include uploaded media). Tune
+it with `BACKUP_INTERVAL_HOURS` (0 to disable) and `BACKUP_RETENTION_COUNT`
+in your container's environment.
+
+## Scheduled tasks
+
+Backups (above) run automatically inside the container. One thing doesn't:
+refreshing the open-recall dashboard flag, since it means an outbound call
+to NHTSA per customer vehicle and shouldn't happen on every page load.
+Schedule it from the host with Unraid's **User Scripts** plugin (or any
+cron), e.g. daily:
+
+```bash
+docker exec repair-hub python manage.py check_recalls
+```
+
+Vehicles checked within the last 7 days are skipped automatically, so
+running this more often than that is harmless. Add `--force` to re-check
+everything regardless of when it was last checked.
+
 ## Adding your own content
 
 ### Repair guides (bulk import)
@@ -324,14 +373,16 @@ No environment variables needed — it defaults to `config/db.sqlite3` and
 
 ## Running tests
 
-The test suite (119 tests) covers models, permissions, and the key workflows
+The test suite (150 tests) covers models, permissions, and the key workflows
 across every app — access control for all three account tiers, the full
 estimate approve/decline/convert lifecycle, inventory stock deduction,
 inspection creation and estimate generation, maintenance reminder due/overdue
 logic, tax calculation and tax-exempt customers, invoice/payment tracking,
-warranty expiration, the technician time clock, and the external API clients
-(mocked, not hitting the real network). It runs against an in-memory SQLite
-database, so it needs no separate database server:
+warranty expiration, the technician time clock, email notifications, the
+calendar feed, report calculations, scheduled backups, two-factor login, and
+the external API clients (mocked, not hitting the real network). It runs
+against an in-memory SQLite database, so it needs no separate database
+server:
 
 ```bash
 python manage.py test --settings=repairhub.test_settings

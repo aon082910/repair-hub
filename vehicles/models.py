@@ -49,6 +49,10 @@ class Vehicle(models.Model):
     notes = models.TextField(blank=True)
     access_token = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
     created_at = models.DateTimeField(auto_now_add=True)
+    open_recall_count = models.PositiveIntegerField(
+        default=0, help_text="Cached from NHTSA; refreshed by the check_recalls management command."
+    )
+    recalls_checked_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         ordering = ["-year", "make__name", "model__name"]
@@ -68,6 +72,17 @@ class Vehicle(models.Model):
             "odometer", flat=True
         ).first()
         return reading
+
+    def refresh_recalls(self):
+        """Re-fetch the open recall count from NHTSA and cache it. Safe to
+        call for reference-only vehicles too (no-ops without owner)."""
+        from .recalls import get_recalls
+
+        recalls = get_recalls(self.make.name, self.model.name, self.year)
+        self.open_recall_count = len(recalls)
+        self.recalls_checked_at = timezone.now()
+        self.save(update_fields=["open_recall_count", "recalls_checked_at"])
+        return recalls
 
 
 class MaintenanceReminder(models.Model):

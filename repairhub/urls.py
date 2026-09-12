@@ -4,9 +4,12 @@ from django.contrib import admin
 from django.contrib.auth import views as auth_views
 from django.urls import include, path
 
+from core.views import TwoFactorLoginView, two_factor_verify
+
 urlpatterns = [
     path("admin/", admin.site.urls),
-    path("login/", auth_views.LoginView.as_view(template_name="registration/login.html"), name="login"),
+    path("login/", TwoFactorLoginView.as_view(), name="login"),
+    path("login/verify/", two_factor_verify, name="two_factor_verify"),
     path("logout/", auth_views.LogoutView.as_view(), name="logout"),
     path("", include("core.urls")),
     path("vehicles/", include("vehicles.urls")),

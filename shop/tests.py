@@ -2,12 +2,14 @@ import datetime
 from decimal import Decimal
 
 from django.contrib.auth import get_user_model
+from django.core import mail
 from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
 
 from vehicles.models import Make, Vehicle, VehicleModel
 
+from .ics import build_appointments_ics
 from .models import (
     Appointment,
     Customer,
@@ -610,3 +612,143 @@ class TimeClockTests(TestCase):
         self.client.login(username="cust", password="pw")
         resp = self.client.post(reverse("shop:workorder_clock_in", args=[self.wo.pk]))
         self.assertEqual(resp.status_code, 403)
+
+
+class NotificationTests(TestCase):
+    def setUp(self):
+        make_staff()
+        self.client.login(username="staff", password="pw")
+        self.customer = Customer.objects.create(name="Jane", email="jane@example.com")
+        self.vehicle = make_vehicle()
+        self.vehicle.owner = self.customer
+        self.vehicle.save()
+
+    def test_appointment_creation_emails_customer(self):
+        self.client.post(
+            reverse("shop:appointment_create"),
+            {
+                "customer": self.customer.pk,
+                "vehicle": self.vehicle.pk,
+                "date": "2030-01-15",
+                "time": "10:00",
+                "reason": "Oil change",
+                "duration_minutes": 60,
+            },
+        )
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(mail.outbox[0].to, ["jane@example.com"])
+        self.assertIn("Oil change", mail.outbox[0].body)
+
+    def test_no_email_sent_when_customer_has_none(self):
+        self.customer.email = ""
+        self.customer.save()
+        self.client.post(
+            reverse("shop:appointment_create"),
+            {
+                "customer": self.customer.pk,
+                "date": "2030-01-15",
+                "time": "10:00",
+                "reason": "Oil change",
+                "duration_minutes": 60,
+            },
+        )
+        self.assertEqual(len(mail.outbox), 0)
+
+    def test_estimate_send_emails_customer_with_portal_link(self):
+        estimate = Estimate.objects.create(customer=self.customer, vehicle=self.vehicle, status="draft")
+        self.client.post(reverse("shop:estimate_send", args=[estimate.pk]))
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertIn(estimate.get_portal_url(), mail.outbox[0].body)
+
+    def test_invoice_creation_emails_customer(self):
+        wo = WorkOrder.objects.create(customer=self.customer, vehicle=self.vehicle, complaint="Brakes")
+        self.client.post(reverse("shop:workorder_create_invoice", args=[wo.pk]))
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertIn("Invoice", mail.outbox[0].subject)
+
+
+class CalendarFeedTests(TestCase):
+    def setUp(self):
+        make_staff()
+        self.client.login(username="staff", password="pw")
+        self.customer = Customer.objects.create(name="Jane")
+        self.vehicle = make_vehicle()
+        self.appointment = Appointment.objects.create(
+            customer=self.customer,
+            vehicle=self.vehicle,
+            scheduled_at=timezone.now() + datetime.timedelta(days=1),
+            reason="Oil change",
+        )
+
+    def test_build_ics_includes_appointment(self):
+        ics = build_appointments_ics(Appointment.objects.all())
+        self.assertIn("BEGIN:VEVENT", ics)
+        self.assertIn("Oil change", ics)
+        self.assertIn(f"UID:repairhub-appointment-{self.appointment.pk}@repair-hub", ics)
+
+    def test_feed_requires_correct_token(self):
+        settings_obj = ShopSettings.get_solo()
+        good_url = reverse("shop:appointments_ics_feed", args=[settings_obj.calendar_feed_token])
+        resp = self.client.get(good_url)
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp["Content-Type"], "text/calendar; charset=utf-8")
+
+        import uuid
+
+        bad_url = reverse("shop:appointments_ics_feed", args=[uuid.uuid4()])
+        resp = self.client.get(bad_url)
+        self.assertEqual(resp.status_code, 404)
+
+    def test_feed_accessible_without_login(self):
+        self.client.logout()
+        settings_obj = ShopSettings.get_solo()
+        url = reverse("shop:appointments_ics_feed", args=[settings_obj.calendar_feed_token])
+        resp = self.client.get(url)
+        self.assertEqual(resp.status_code, 200)
+
+    def test_regenerate_token_changes_it(self):
+        old_token = ShopSettings.get_solo().calendar_feed_token
+        self.client.post(reverse("shop:regenerate_calendar_feed_token"))
+        new_token = ShopSettings.get_solo().calendar_feed_token
+        self.assertNotEqual(old_token, new_token)
+
+
+class ReportsDashboardTests(TestCase):
+    def setUp(self):
+        make_staff()
+        self.client.login(username="staff", password="pw")
+        self.customer = Customer.objects.create(name="Jane")
+        self.vehicle = make_vehicle()
+
+    def test_outstanding_balance_reflects_unpaid_invoices(self):
+        wo = WorkOrder.objects.create(customer=self.customer, vehicle=self.vehicle, complaint="Brakes")
+        LaborLine.objects.create(work_order=wo, description="Pads", hours=1, rate=Decimal("100.00"))
+        Invoice.objects.create(work_order=wo, invoice_number="INV-00001")
+        resp = self.client.get(reverse("shop:reports"))
+        self.assertEqual(resp.context["outstanding_balance"], Decimal("100.00"))
+
+    def test_avg_repair_hours_none_without_completed_orders(self):
+        resp = self.client.get(reverse("shop:reports"))
+        self.assertIsNone(resp.context["avg_repair_hours"])
+
+    def test_avg_repair_hours_computed_for_completed_orders(self):
+        wo = WorkOrder.objects.create(customer=self.customer, vehicle=self.vehicle, complaint="Brakes")
+        wo.status = "completed"
+        wo.save(update_fields=["status"])
+        wo.completed_at = wo.created_at + datetime.timedelta(hours=2)
+        wo.save(update_fields=["completed_at"])
+        resp = self.client.get(reverse("shop:reports"))
+        self.assertAlmostEqual(resp.context["avg_repair_hours"], 2.0, places=1)
+
+    def test_top_parts_counts_quantity_used(self):
+        wo = WorkOrder.objects.create(customer=self.customer, vehicle=self.vehicle, complaint="Brakes")
+        wo.status = "completed"
+        wo.save(update_fields=["status"])
+        PartLine.objects.create(work_order=wo, description="Brake Pad", quantity=Decimal("4"), unit_price=Decimal("20"))
+        resp = self.client.get(reverse("shop:reports"))
+        top_parts = dict(resp.context["top_parts"])
+        self.assertEqual(top_parts["Brake Pad"], Decimal("4"))
+
+    def test_revenue_by_month_has_six_entries(self):
+        resp = self.client.get(reverse("shop:reports"))
+        self.assertEqual(len(resp.context["revenue_by_month"]), 6)

@@ -3,7 +3,8 @@ FROM python:3.12-slim
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     DB_PATH=/config/db.sqlite3 \
-    MEDIA_ROOT=/config/media
+    MEDIA_ROOT=/config/media \
+    BACKUP_DIR=/config/backups
 
 WORKDIR /app
 

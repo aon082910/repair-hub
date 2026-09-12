@@ -17,6 +17,22 @@
   <div class="stat"><div class="num">${{ total_revenue|floatformat:0 }}</div><div class="label">Revenue</div></div>
   <div class="stat"><div class="num">{{ order_count }}</div><div class="label">Completed Orders</div></div>
   <div class="stat"><div class="num">${{ avg_ticket|floatformat:0 }}</div><div class="label">Avg Ticket</div></div>
+  <div class="stat"><div class="num">{% if avg_repair_hours %}{{ avg_repair_hours|floatformat:1 }}h{% else %}—{% endif %}</div><div class="label">Avg Repair Time</div></div>
+  <div class="stat"><div class="num">${{ outstanding_balance|floatformat:0 }}</div><div class="label">Outstanding Balance</div></div>
+</div>
+
+<div class="section-title">Revenue by Month</div>
+<div class="card">
+  <table>
+    <tr><th>Month</th><th>Revenue</th><th></th></tr>
+    {% for m in revenue_by_month %}
+    <tr>
+      <td>{{ m.label }}</td>
+      <td>${{ m.total|floatformat:0 }}</td>
+      <td style="width:50%;"><div style="background:var(--accent);height:0.8rem;border-radius:3px;width:{{ m.bar_percent }}%;"></div></td>
+    </tr>
+    {% endfor %}
+  </table>
 </div>
 
 <div class="section-title">Work Orders by Status</div>
@@ -40,6 +56,20 @@
   </table>
   {% else %}
   <p class="muted">No repair guides linked to work orders in this period.</p>
+  {% endif %}
+</div>
+
+<div class="section-title">Top Parts Used (this period)</div>
+<div class="card">
+  {% if top_parts %}
+  <table>
+    <tr><th>Part</th><th>Quantity Used</th></tr>
+    {% for description, qty in top_parts %}
+    <tr><td>{{ description }}</td><td>{{ qty }}</td></tr>
+    {% endfor %}
+  </table>
+  {% else %}
+  <p class="muted">No parts used on completed work orders in this period.</p>
   {% endif %}
 </div>
 

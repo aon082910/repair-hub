@@ -23,4 +23,14 @@
     <button class="btn secondary" type="submit">Download CSV</button>
   </form>
 </div>
+
+<div class="section-title">Appointment Calendar Feed</div>
+<div class="card">
+  <p class="muted">Subscribe to this URL from Google Calendar, Apple Calendar, or Outlook to see appointments alongside your other calendars. Anyone with this link can view (not edit) your appointment schedule, so keep it private.</p>
+  <input type="text" readonly value="{{ calendar_feed_url }}" style="width:100%;font-family:monospace;font-size:0.85rem;" onclick="this.select();">
+  <form method="post" action="{% url 'shop:regenerate_calendar_feed_token' %}" style="margin-top:0.75rem;">
+    {% csrf_token %}
+    <button class="btn secondary" type="submit" onclick="return confirm('This invalidates the current link. Continue?');">Regenerate Link</button>
+  </form>
+</div>
 {% endblock %}

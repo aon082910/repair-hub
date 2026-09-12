@@ -132,6 +132,16 @@
 <div class="tab-panel" id="tab-recalls">
   <div class="card">
     <p class="muted">Live data from NHTSA's free public API (api.nhtsa.gov) for {{ vehicle.year }} {{ vehicle.make }} {{ vehicle.model }}. Requires internet access from this server.</p>
+    {% if vehicle.owner %}
+    <p class="muted">
+      Dashboard flag: {{ vehicle.open_recall_count }} open recall{{ vehicle.open_recall_count|pluralize }}
+      {% if vehicle.recalls_checked_at %}(checked {{ vehicle.recalls_checked_at|date:"M j, Y" }}){% else %}(never checked){% endif %}.
+      <form method="post" action="{% url 'vehicles:refresh_recalls' vehicle.pk %}" style="display:inline;">
+        {% csrf_token %}
+        <button class="btn btn-sm" type="submit">Refresh now</button>
+      </form>
+    </p>
+    {% endif %}
     <div id="recalls-status" class="muted">Loading…</div>
     <div id="recalls-content"></div>
   </div>

@@ -12,7 +12,9 @@ if [ "$(id -u)" = "0" ]; then
   chown -R "$PUID:$PGID" /config /app/staticfiles
 
   export DJANGO_SUPERUSER_USERNAME DJANGO_SUPERUSER_EMAIL DJANGO_SUPERUSER_PASSWORD \
-    DJANGO_SECRET_KEY DJANGO_DEBUG DJANGO_ALLOWED_HOSTS DB_PATH MEDIA_ROOT DJANGO_TIME_ZONE TZ
+    DJANGO_SECRET_KEY DJANGO_DEBUG DJANGO_ALLOWED_HOSTS DB_PATH MEDIA_ROOT DJANGO_TIME_ZONE TZ \
+    EMAIL_HOST EMAIL_PORT EMAIL_HOST_USER EMAIL_HOST_PASSWORD EMAIL_USE_TLS EMAIL_USE_SSL \
+    DEFAULT_FROM_EMAIL BACKUP_INTERVAL_HOURS BACKUP_RETENTION_COUNT BACKUP_DIR
   exec gosu "$PUID:$PGID" "$0" "$@"
 fi
 
@@ -32,5 +34,7 @@ else:
     print(f'Superuser {username} already exists')
 "
 fi
+
+python manage.py backup_daemon &
 
 exec gunicorn repairhub.wsgi:application --bind 0.0.0.0:8000 --workers 3

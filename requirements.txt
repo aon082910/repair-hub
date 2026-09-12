@@ -7,3 +7,4 @@ requests==2.32.3
 python-dotenv==1.0.1
 qrcode==7.4.2
 xhtml2pdf==0.2.17
+pyotp==2.9.0

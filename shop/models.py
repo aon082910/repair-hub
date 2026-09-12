@@ -15,6 +15,9 @@ class ShopSettings(models.Model):
         help_text="Sales tax rate applied to labor + parts, e.g. 8.25 for 8.25%.",
     )
     business_name = models.CharField(max_length=150, blank=True)
+    calendar_feed_token = models.UUIDField(
+        default=uuid.uuid4, editable=False, help_text="Unguessable token for the appointments .ics subscribe URL."
+    )
 
     class Meta:
         verbose_name_plural = "shop settings"
@@ -33,6 +36,10 @@ class ShopSettings(models.Model):
     def get_solo(cls):
         obj, _ = cls.objects.get_or_create(pk=1)
         return obj
+
+    def regenerate_calendar_feed_token(self):
+        self.calendar_feed_token = uuid.uuid4()
+        self.save(update_fields=["calendar_feed_token"])
 
 
 class Customer(models.Model):

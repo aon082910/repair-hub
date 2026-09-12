@@ -17,7 +17,7 @@ class VehicleModelAdmin(admin.ModelAdmin):
 
 @admin.register(Vehicle)
 class VehicleAdmin(admin.ModelAdmin):
-    list_display = ["__str__", "vin", "owner", "created_at"]
+    list_display = ["__str__", "vin", "owner", "open_recall_count", "created_at"]
     list_filter = ["make", "year"]
     search_fields = ["vin", "make__name", "model__name", "owner__name"]
     autocomplete_fields = ["make", "model", "owner"]

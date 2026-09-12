@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}Verify - Repair-Hub{% endblock %}
+{% block content %}
+<div class="card" style="max-width:380px;margin:4rem auto;">
+  <h2 style="margin-top:0;">Two-Factor Verification</h2>
+  <p class="muted">Enter the 6-digit code from your authenticator app.</p>
+  <form method="post">
+    {% csrf_token %}
+    <label for="id_code">Code</label>
+    <input type="text" name="code" id="id_code" inputmode="numeric" pattern="[0-9]*" required autofocus>
+    {% if error %}<p style="color:var(--danger);">{{ error }}</p>{% endif %}
+    <button class="btn" type="submit" style="margin-top:1.25rem;width:100%;">Verify</button>
+  </form>
+</div>
+{% endblock %}
